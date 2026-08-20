@@ -20,7 +20,8 @@
     "test:claude-smoke": "tsx src/test-claude-smoke.ts",
     "test:cross-provider": "tsx src/test-cross-provider-acceptance.ts",
     "test:cross-provider-live": "node --env-file=.env --import tsx src/test-cross-provider-live.ts",
-    "test:provider-architecture": "tsx src/test-provider-architecture.ts"
+    "test:provider-architecture": "tsx src/test-provider-architecture.ts",
+    "test:execution-policy-characterization": "tsx src/test-provider-execution-policy-characterization.ts"
   },
   "keywords": [],
   "author": "",

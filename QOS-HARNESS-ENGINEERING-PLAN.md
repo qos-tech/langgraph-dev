@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
 **Current task:** `Release v0.1.0-alpha.2`
-**Task status:** Ready for release
+****Task status:** In progress — Step 1
 
 ---
 
@@ -3230,6 +3230,209 @@ Verified outcomes:
 **Release decision:** `v0.1.0-alpha.2 — Provider Abstraction Alpha`
 
 **Next:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
+
+
+# H-ARCH-003 — Execution Policy / Runtime Composition Hardening
+
+## Status
+
+**Milestone:** In progress
+**Current step:** Step 1 — Characterize Execution Policy Differences
+**Release baseline:** `v0.1.0-alpha.2`
+
+## Milestone objective
+
+H-ARCH-002 proved that graph execution can substitute concrete LLM providers without graph-node edits.
+
+H-ARCH-003 hardens that abstraction so providers do not need to pretend they share execution controls that are not semantically equivalent.
+
+The milestone focuses on:
+
+```text
+provider capabilities
+portable execution policy
+provider-specific execution controls
+timeout ownership
+retry ownership
+provider lifecycle
+runtime composition
+```
+
+The graph must remain provider-neutral.
+
+## Planned steps
+
+1. **Characterize Execution Policy Differences**
+2. **Define Provider Capabilities Contract**
+3. **Separate Portable Policy from Provider Hints**
+4. **Introduce Runtime Role Configuration**
+5. **Centralize Timeout / Retry Ownership**
+6. **Provider Lifecycle / Process Policy**
+7. **Cross-Provider Acceptance / Architecture Review**
+
+The sequence may be reduced if Step 1 evidence proves that a planned abstraction is unnecessary.
+
+---
+
+## H-ARCH-003 Step 1 — Characterize Execution Policy Differences
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Freeze the current execution-policy differences between NVIDIA and Claude CLI before redesigning contracts or runtime composition.
+
+This is a characterization step.
+
+No production behavior changes are allowed.
+
+### Current evidence matrix
+
+| Concern | NVIDIA | Claude CLI |
+| --- | --- | --- |
+| Shared structured provider contract | yes | yes |
+| `maxTokens` equivalent | maps to `max_tokens` | no equivalent |
+| `maxRetries` equivalent | provider-owned HTTP/network retries | no equivalent |
+| Timeout policy | none explicit | none explicit |
+| Invocation lifecycle | HTTP `fetch` per request | CLI runner/process invocation per request |
+| Structured-output transport | response text + shared JSON extraction | JSON CLI envelope; `structured_output` or JSON from `result` |
+| Usage normalization | NVIDIA snake_case → neutral usage | CLI input/output tokens → neutral usage |
+| Provider-specific model behavior | Nemotron/GPT-OSS request/recovery logic | CLI flags/isolation policy |
+| Retryable transport failures | 429/500/502/503/504 + network errors | no adapter retry policy |
+| Default provider | NVIDIA | non-default |
+
+### Key finding to protect
+
+The current shared request shape contains:
+
+```text
+maxTokens
+maxRetries
+```
+
+but the adapters do not implement equivalent semantics.
+
+NVIDIA consumes both controls.
+
+Claude CLI intentionally ignores both because mapping them to unrelated CLI flags would be incorrect.
+
+Step 1 characterizes this fact; it does not fix it.
+
+### Deterministic characterization test
+
+Create:
+
+```text
+src/test-provider-execution-policy-characterization.ts
+```
+
+The test uses:
+
+```text
+NvidiaProvider
+  → mocked fetch
+
+ClaudeCliProvider
+  → injected mocked runner
+```
+
+It verifies:
+
+- NVIDIA maps `maxTokens` to `max_tokens`;
+- Claude does not map `maxTokens` to an invented CLI control;
+- Claude does not map `maxRetries` to `--max-turns`;
+- NVIDIA currently owns retry behavior inside the adapter;
+- neither provider has an explicit timeout policy;
+- Claude default execution is process/runner based;
+- both normalize token usage into the shared result contract;
+- both preserve their provider-specific structured-output transport.
+
+No real NVIDIA or Claude request is allowed.
+
+### Scope
+
+Create:
+
+```text
+src/test-provider-execution-policy-characterization.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+src/providers/structured-output.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- add a capabilities interface;
+- remove `maxTokens` or `maxRetries`;
+- introduce timeout controls;
+- move retry ownership;
+- optimize Claude CLI startup;
+- introduce provider fallback;
+- change default provider/model selection;
+- change graph nodes;
+- change prompts;
+- add benchmark telemetry.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] current NVIDIA execution controls are characterized.
+- [ ] current Claude CLI execution controls are characterized.
+- [ ] `maxTokens` semantic mismatch is proven deterministically.
+- [ ] `maxRetries` semantic mismatch is proven deterministically.
+- [ ] current retry ownership is recorded.
+- [ ] absence of explicit provider timeout policy is recorded.
+- [ ] current Claude process/runner lifecycle boundary is recorded.
+- [ ] structured-output transport differences are recorded.
+- [ ] token usage normalization remains green for both providers.
+- [ ] no production source behavior changes.
+- [ ] no real provider usage is consumed by the test.
+- [ ] all alpha.2 regression gates remain green.
+
+### Commit
+
+```bash
+git commit -m "test(provider): characterize execution policy differences"
+```
+
+### Exit condition
+
+Step 1 is complete when the current provider execution-policy asymmetries are protected by deterministic tests and the full regression gate passes.
+
+Only then may Step 2 decide whether a provider-capabilities contract is actually justified by evidence.
 
 # Release Procedure — v0.1.0-alpha.2
 
