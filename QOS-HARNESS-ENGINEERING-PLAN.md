@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 6: Inject Providers into Graph Nodes`
-**Task status:** In progress — Step 6
+**Current task:** `H-ARCH-002 — Step 7: Add Claude CLI Provider Adapter`
+**Task status:** In progress — Step 7
 
 ---
 
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 6 — Inject Providers into Graph Nodes
+**Current step:** Step 7 — Add Claude CLI Provider Adapter
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2636,7 +2636,7 @@ Role-to-provider/model/budget composition is now explicit and deterministic. The
 
 ## H-ARCH-002 Step 6 — Inject Providers into Graph Nodes
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2677,6 +2677,90 @@ git commit -m "refactor(graph): inject LLM provider bindings"
 Changing a role's provider no longer requires editing `src/graph/nodes.ts`.
 
 **Next:** Step 7 — add a second `StructuredLlmProvider` implementation.
+
+
+## H-ARCH-002 Step 6 Validation Record
+
+**Status:** ✅ Accepted
+
+Graph LLM nodes now consume role bindings and `StructuredLlmProvider.generateStructured()` instead of importing NVIDIA directly. Provider/model/budget selection is injected through graph composition, and the Step 6 full gate passed.
+
+**Decision:** prove the abstraction with a second concrete provider without changing graph nodes or the default runtime composition.
+
+## H-ARCH-002 Step 7 — Add Claude CLI Provider Adapter
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Add Claude Code CLI as the second concrete implementation of `StructuredLlmProvider` while keeping Claude in the role of an LLM provider rather than a second repository/coding orchestrator.
+
+### Isolation policy
+
+Every adapter call uses `--safe-mode`, `--tools ""`, `--disallowedTools "mcp__*"`, `--no-session-persistence`, and `--disable-slash-commands`.
+
+`--bare` is intentionally not used because the installed CLI documents that bare mode bypasses OAuth/keychain authentication.
+
+### Structured-output decision
+
+The CLI supports native `--json-schema`, but the current provider-neutral contract exposes only `validate: (value: unknown) => T`; it does not expose a JSON Schema. Step 7 therefore uses `--output-format json`, reads `structured_output` when present or extracts JSON from the CLI `result` field, and applies the existing validator.
+
+Native `--json-schema` integration is deferred until the contract contains explicit schema evidence instead of only a validator closure.
+
+### Portability finding — execution budgets
+
+Claude Code CLI does not expose equivalents for the current neutral `maxTokens` and `maxRetries` fields. The adapter does not incorrectly map these to `--max-turns`, because turns and tokens/retries are different semantics. This mismatch is recorded for Step 8/9 architecture review.
+
+### Files in this step
+
+Create:
+
+```text
+src/providers/claude-cli.ts
+src/test-claude-provider.ts
+src/test-claude-smoke.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify graph nodes, graph builder, provider contracts, NVIDIA adapter, role composition, or default composition.
+
+### Acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+Then run once for live adapter acceptance:
+
+```bash
+npm run test:claude-smoke
+```
+
+### Commit
+
+```bash
+git commit -m "feat(provider): add Claude CLI adapter"
+```
+
+### Exit condition
+
+Step 7 is complete when Claude CLI satisfies the provider contract in deterministic tests and one real smoke invocation, while NVIDIA remains the default composition and graph code is unchanged.
+
+**Next:** Step 8 — Cross-Provider Acceptance.
 
 # Release Procedure — v0.1.0-alpha.1
 
