@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 4: Convert NVIDIA to Contract Adapter`
-**Task status:** In progress — Step 4
+**Current task:** `H-ARCH-002 — Step 5: Provider Resolution / Composition`
+**Task status:** In progress — Step 5
 
 ---
 
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 4 — Convert NVIDIA to Contract Adapter
+**Current step:** Step 5 — Provider Resolution / Composition
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2335,7 +2335,7 @@ The full Step 3 gate passed.
 
 ## H-ARCH-002 Step 4 — Convert NVIDIA to Contract Adapter
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2469,6 +2469,159 @@ git commit -m "feat(provider): adapt NVIDIA to structured LLM contract"
 Step 4 is complete when NVIDIA can be consumed through `StructuredLlmProvider` while the legacy boundary remains behaviorally unchanged.
 
 **Next:** Step 5 — introduce explicit provider resolution/composition for agent roles without yet spreading provider-specific branches through the graph.
+
+
+
+## H-ARCH-002 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+`NvidiaProvider` now implements `StructuredLlmProvider` and delegates to the
+characterized `callNvidiaJson` compatibility boundary.
+
+The adapter normalizes NVIDIA token usage into the provider-neutral camelCase
+shape while preserving request behavior, validation, timing, retry/backoff,
+Nemotron customization, GPT-OSS recovery, and the legacy graph-facing API.
+
+The full Step 4 gate passed.
+
+**Decision:** proceed to explicit role composition before changing graph-node
+dependencies.
+
+
+## H-ARCH-002 Step 5 — Provider Resolution / Composition
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Create one explicit composition boundary that maps current LLM roles to a
+provider, model, and execution budget without introducing provider-specific
+branches inside graph nodes.
+
+### Architectural decision
+
+Introduce a provider-neutral role-binding contract:
+
+```text
+LlmRole
+  ├── planner
+  ├── reviewer
+  └── refiner
+
+LlmRoleBinding
+  ├── provider: StructuredLlmProvider
+  ├── model
+  ├── maxTokens
+  └── maxRetries
+```
+
+`src/providers/role-composition.ts` owns only the neutral binding/resolution
+types and functions.
+
+`src/providers/default-composition.ts` is the concrete runtime composition root.
+For the current baseline it binds all three roles to `nvidiaProvider` while
+preserving the exact model and execution settings currently duplicated in
+`src/graph/nodes.ts`.
+
+### Why execution budgets belong in the binding
+
+The current reviewer node contains model-family policy:
+
+```ts
+REVIEW_MODEL.startsWith("openai/gpt-oss") ? 1800 : 1400
+```
+
+Leaving that policy in the graph would make Step 6 only superficially
+provider-neutral.
+
+Step 5 therefore moves the future source of truth for model and execution
+configuration into composition. The old node-local constants remain untouched
+for one transitional step so runtime behavior cannot change before the new
+composition is characterized.
+
+### Transitional duplication
+
+During Step 5:
+
+```text
+nodes.ts                    default-composition.ts
+current runtime values     future composition values
+```
+
+Both intentionally contain equivalent model/token/retry settings.
+
+Step 6 removes the node-local copies and consumes the characterized bindings.
+
+### Files in this step
+
+Create:
+
+```text
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/test-provider-composition.ts
+```
+
+Modify:
+
+```text
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/nvidia.ts
+src/providers/structured-output.ts
+src/graph/nodes.ts
+```
+
+### Acceptance criteria
+
+- [ ] planner/reviewer/refiner are explicit provider-neutral roles.
+- [ ] each role resolves to provider + model + execution budget.
+- [ ] different roles can be bound to different provider implementations.
+- [ ] the concrete default composition uses `nvidiaProvider`.
+- [ ] planner model resolution preserves `NVIDIA_PLANNER_MODEL` and its current default.
+- [ ] reviewer model resolution preserves `NVIDIA_REVIEW_MODEL` and its current default.
+- [ ] refiner continues sharing the planner model.
+- [ ] planner keeps `maxTokens=1800`, `maxRetries=6`.
+- [ ] reviewer keeps GPT-OSS `1800`, otherwise `1400`, with `maxRetries=6`.
+- [ ] refiner keeps `maxTokens=2600`, `maxRetries=6`.
+- [ ] graph nodes remain untouched.
+- [ ] no new runtime dependency is added.
+- [ ] all previous gates remain green.
+
+### Acceptance gate
+
+The new composition test is intentionally run directly in this step so the
+patch does not speculate about the current `package.json` snapshot:
+
+```bash
+npm run typecheck && \
+npx tsx src/test-provider-composition.ts && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+```bash
+git commit -m "feat(provider): compose LLM role bindings"
+```
+
+### Exit condition
+
+Step 5 is complete when role-to-provider/model/budget composition is
+deterministic, testable, and isolated from graph code.
+
+**Next:** Step 6 — inject the composed role bindings into graph nodes and remove
+the direct `callNvidiaJson` dependency.
 
 
 # Release Procedure — v0.1.0-alpha.1
