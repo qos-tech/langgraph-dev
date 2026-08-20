@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Step 3: Extract Context Helpers`
+**Current task:** `H-ARCH-001 — Step 4: Extract Prompt Builders`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -1149,9 +1149,9 @@ Observed change:
 
 **Next:** Step 3 — extract context helpers and request normalization.
 
-### Step 3 — Extract context helpers 🚧
+### Step 3 — Extract context helpers ✅
 
-**Status: In progress.**
+**Status: Accepted.**
 
 Move pure context/request helpers.
 
@@ -1159,7 +1159,32 @@ Add focused tests where useful.
 
 Run typecheck/tests.
 
-### Step 4 — Extract prompt builders
+## 12.13.3 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+Observed change:
+
+- `src/graph/context.ts` now owns:
+  - `listFiles`
+  - `packageContext`
+  - `knownFileContext`
+  - `reviewFeedback`
+  - `normalizeRequests`
+- `src/graph.ts` imports these helpers and temporarily re-exports them for compatibility with characterization tests;
+- no intentional prompt, model, router, provider, retry, state, or repository-read behavior changed.
+
+Validation expected/used for acceptance:
+
+- `npm run typecheck`
+- `npm run test:graph-characterization`
+- `npm run test:tools`
+
+**Next:** Step 4 — extract prompt builders without changing prompt semantics.
+
+### Step 4 — Extract prompt builders 🚧
+
+**Status: In progress.**
 
 Move prompt text verbatim.
 
@@ -1215,6 +1240,169 @@ NVIDIA Provider   Claude Provider
 That belongs to `H-ARCH-002`, not this task.
 
 ---
+
+
+## 12.16 Step 4 Detailed Specification — Extract Prompt Builders
+
+### Objective
+
+Move prompt construction out of `src/graph.ts` into a dedicated module without changing prompt semantics, model behavior, routing, or provider behavior.
+
+### New module
+
+```text
+src/graph/prompts.ts
+```
+
+Expected public functions:
+
+```ts
+buildPlannerPrompt(state: DevStateType): string
+buildReviewerPrompt(state: DevStateType): string
+buildRefinePrompt(state: DevStateType): string
+```
+
+### Responsibilities
+
+`src/graph/prompts.ts` owns only prompt construction.
+
+It may depend on:
+
+- `DevStateType`;
+- pure context helpers from `src/graph/context.ts`.
+
+It must not:
+
+- call NVIDIA or any other provider;
+- read repository files;
+- mutate state;
+- route graph execution;
+- choose models;
+- perform retries;
+- validate provider responses.
+
+### `src/graph.ts` after extraction
+
+The graph nodes remain responsible for orchestration.
+
+Expected shape:
+
+```text
+planNode
+  → buildPlannerPrompt(state)
+  → callNvidiaJson(...)
+  → normalizeRequests(...)
+
+reviewPlanNode
+  → buildReviewerPrompt(state)
+  → callNvidiaJson(...)
+
+refineNode
+  → buildRefinePrompt(state)
+  → callNvidiaJson(...)
+```
+
+### Behavioral invariants
+
+During Step 4, do not intentionally change:
+
+- prompt wording;
+- prompt rules;
+- expected JSON shape described in prompts;
+- `PLANNER_MODEL`;
+- `REVIEW_MODEL`;
+- `maxTokens`;
+- `maxRetries`;
+- Zod schemas;
+- routing behavior;
+- planning/review/refine counters;
+- repository reading;
+- NVIDIA provider behavior.
+
+### Characterization tests
+
+Add focused tests for the new prompt builders.
+
+The tests should prove that generated prompts still contain the critical existing contract markers, including:
+
+Planner:
+
+- `PLANNER EXPLORATÓRIO`;
+- current task;
+- repository/file context;
+- `needsMoreContext`;
+- `filesToRead`.
+
+Reviewer:
+
+- `REVIEWER independente`;
+- `approve_read`;
+- `revise_read`;
+- `enough_context`;
+- current exploration plan.
+
+Refine:
+
+- `ARQUITETO FINAL`;
+- `changes_required`;
+- `already_satisfied`;
+- `blocked`;
+- validation contract.
+
+The reviewer builder must preserve the existing guard that requires an `explorationPlan`.
+
+### Acceptance criteria
+
+Step 4 is accepted only when:
+
+- [ ] `src/graph/prompts.ts` exists.
+- [ ] Planner, reviewer, and refine prompt construction is no longer embedded in `src/graph.ts`.
+- [ ] `src/graph.ts` still owns orchestration/provider calls.
+- [ ] No intentional prompt-semantic changes are introduced.
+- [ ] `npm run typecheck` passes.
+- [ ] prompt characterization tests pass.
+- [ ] `npm run test:graph-characterization` passes.
+- [ ] `npm run test:tools` passes.
+- [ ] no model, router, provider, retry, or state semantics change.
+- [ ] no new runtime dependency is added.
+
+### Planned test command
+
+Initially:
+
+```bash
+npx tsx src/test-prompt-characterization.ts
+```
+
+After validation, add an official package script:
+
+```json
+"test:prompt-characterization": "tsx src/test-prompt-characterization.ts"
+```
+
+and rerun the gate through the package script before committing.
+
+### Suggested commit
+
+```bash
+git commit -m "refactor(graph): extract prompt builders"
+```
+
+### Non-goals
+
+Do not yet:
+
+- optimize prompt token usage;
+- shorten prompts;
+- change reviewer semantics;
+- introduce Claude;
+- introduce prompt templates from external files;
+- introduce a generic prompt registry;
+- change provider abstraction;
+- change context ranking/budgeting.
+
+Those belong to later architecture/context tasks.
+
 
 # 13. Next Task Preview
 
