@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-002 — Step 1: Characterize Current Provider Boundary`
+**Current task:** `H-ARCH-002 — Step 2: Define Provider Contract`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress  
-**Current step:** Step 1 — Characterize Current Provider Boundary  
+**Current step:** Step 2 — Define Provider Contract  
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2107,6 +2107,80 @@ Provider substitution must not require graph-node edits. The same orchestration 
 ## Non-goals
 
 H-ARCH-002 does not yet implement benchmark-driven model selection, telemetry dashboards, Repository Intelligence, Context Engine, implementation/fix agents, or specialist Product/UX/UI agents.
+
+
+
+## H-ARCH-002 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The NVIDIA provider boundary is protected by deterministic characterization tests. The full Step 1 gate passed, including TypeScript, provider characterization, prompt characterization, graph characterization, and repository/tool tests.
+
+**Decision:** use this characterized behavior as the evidence baseline for the provider-neutral contract.
+
+## H-ARCH-002 Step 2 — Define Provider Contract
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Define the smallest provider-neutral contract required by the current planning workflow without changing NVIDIA production behavior or graph-node behavior.
+
+### Architectural decision
+
+```ts
+export interface StructuredLlmProvider {
+  generateStructured<T>(
+    request: StructuredLlmRequest<T>,
+  ): Promise<StructuredLlmResult<T>>;
+}
+```
+
+The request carries `model`, `prompt`, `validate`, `maxTokens`, and `maxRetries`. The result carries validated `data`, `elapsedSeconds`, and optional provider-neutral token usage.
+
+### Boundary rules
+
+The contract must not expose NVIDIA URLs/authentication, HTTP details, `reasoning_effort`, `chat_template_kwargs`, `reasoning_content`, GPT-OSS recovery behavior, NVIDIA-specific errors, or a Zod dependency.
+
+### Files in this step
+
+Create:
+
+```text
+src/providers/contracts.ts
+src/test-provider-contract.ts
+```
+
+Update:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/nvidia.ts
+src/graph/nodes.ts
+```
+
+### Acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Exit condition
+
+Step 2 is complete when the contract compiles, a fake provider proves substitutability at the type level, production behavior remains unchanged, and all existing gates remain green.
+
+**Next:** Step 3 — separate genuinely shared structured-output behavior from adapter-specific behavior.
 
 
 # Release Procedure — v0.1.0-alpha.1
