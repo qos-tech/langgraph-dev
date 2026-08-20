@@ -3,12 +3,69 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Step 7: Extract Graph Nodes and Remove Circular Dependency`
+**Current task:** `H-ARCH-002 — LLM Provider Contract`
 **Task status:** Approved — Step 1 in progress
 
 ---
 
-## 1. Product Objective
+### Current Release
+
+**Version:** `v0.1.0-alpha.1`  
+**Status:** Architecture Foundation Alpha  
+**Milestone:** `H-ARCH-001 — Graph Decomposition` ✅
+
+### Architecture Milestone
+
+`H-ARCH-001` is complete.
+
+The original graph monolith has been decomposed into explicit architectural boundaries:
+
+```text
+src/
+├── graph.ts
+└── graph/
+    ├── schemas.ts
+    ├── context.ts
+    ├── prompts.ts
+    ├── routers.ts
+    ├── nodes.ts
+    └── build-dev-graph.ts
+```
+
+The public `src/graph.ts` module now acts primarily as a compatibility/public API boundary.
+
+### Established boundaries
+
+- Structured output schemas
+- Context construction and request normalization
+- Prompt construction
+- Graph routing
+- Graph node execution
+- LangGraph assembly
+- Provider integration
+- Repository inspection and tools
+
+### Validation baseline
+
+```bash
+npm run typecheck && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Release significance
+
+`v0.1.0-alpha.1` represents the first reproducible architectural baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
+
+The baseline enables the next phases: LLM Provider Contract, Composition Root, benchmark/telemetry, Repository Intelligence, Context Engine, Evidence Protocol, Planning/Review, Implementation, Validation/Fix Loop, and Production Hardening.
+
+### Next architecture task
+
+`H-ARCH-002 — LLM Provider Contract`
+
+
+# 1. Product Objective
 
 Build a multi-agent development orchestration engine capable of developing applications in a predictable, economical, auditable, and verifiable way.
 
@@ -1647,6 +1704,22 @@ Do not extract graph nodes in this step. Do not redesign dependency injection or
 
 
 
+## 12.13.7 Step 7 Validation Record
+
+**Status:** ✅ Accepted
+
+Observed result:
+
+- `src/graph/nodes.ts` owns the eight graph node implementations;
+- `src/graph/build-dev-graph.ts` imports nodes directly from `./nodes.js`;
+- the temporary circular dependency introduced by Step 6 was removed;
+- `src/graph.ts` is now a small compatibility/public API boundary;
+- the full validation gate passed.
+
+**H-ARCH-001 conclusion:** structurally complete.  
+**Release baseline:** `v0.1.0-alpha.1`  
+**Next:** `H-ARCH-002 — LLM Provider Contract`
+
 ## 12.19 Step 7 Detailed Specification — Extract Graph Nodes and Remove Circular Dependency
 
 ### Objective
@@ -1931,3 +2004,62 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 - [ ] Run `npm run test:graph-characterization`.
 - [ ] Confirm baseline tests before Step 2.
 - [ ] Step 2 — Extract graph schemas.
+
+
+# Release Procedure — v0.1.0-alpha.1
+
+Run the release gate:
+
+```bash
+npm run typecheck && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+Update package metadata:
+
+```bash
+npm version 0.1.0-alpha.1 --no-git-tag-version
+git diff -- package.json package-lock.json
+```
+
+Stage and review:
+
+```bash
+git add package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN-v2.md
+git diff --cached --stat
+git diff --cached
+```
+
+Create the release commit:
+
+```bash
+git commit -m "chore(release): prepare v0.1.0-alpha.1"
+```
+
+Create and verify the annotated tag:
+
+```bash
+git tag -a v0.1.0-alpha.1 \
+  -m "QOS Harness v0.1.0-alpha.1 - architecture foundation"
+
+git show v0.1.0-alpha.1 --stat
+```
+
+Publish:
+
+```bash
+git push origin main
+git push origin v0.1.0-alpha.1
+```
+
+Final verification:
+
+```bash
+git status
+git tag --list "v0.1.0*"
+```
+
+After publication, development continues with `H-ARCH-002 — LLM Provider Contract`.
+
