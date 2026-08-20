@@ -1,6 +1,4 @@
-import { StateGraph, START, END } from "@langchain/langgraph";
-
-import { DevState, type DevStateType } from "./state.js";
+import type { DevStateType } from "./state.js";
 
 import { inspectRepository } from "./repository/inspect.js";
 
@@ -59,7 +57,7 @@ export {
  * ============================================================
  */
 
-const analyzeNode = async (
+export const analyzeNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n🔎 ANALYZE");
@@ -93,7 +91,7 @@ const analyzeNode = async (
  * ============================================================
  */
 
-const planNode = async (
+export const planNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n🧠 PLAN — NEMOTRON");
@@ -140,7 +138,7 @@ const planNode = async (
  * ============================================================
  */
 
-const reviewPlanNode = async (
+export const reviewPlanNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log(`\n🔍 REVIEW PLAN — ${REVIEW_MODEL}`);
@@ -189,7 +187,7 @@ const reviewPlanNode = async (
  * ============================================================
  */
 
-const readContextNode = async (
+export const readContextNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n📖 READ CONTEXT");
@@ -277,7 +275,7 @@ const readContextNode = async (
  * ============================================================
  */
 
-const refineNode = async (
+export const refineNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n🎯 REFINE — NEMOTRON");
@@ -314,7 +312,7 @@ const refineNode = async (
  * ============================================================
  */
 
-const planGateNode = async (
+export const planGateNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n🚦 PLAN GATE");
@@ -458,7 +456,7 @@ const planGateNode = async (
  * ============================================================
  */
 
-const reportNode = async (
+export const reportNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n📋 PLANNING REPORT");
@@ -480,7 +478,7 @@ const reportNode = async (
   };
 };
 
-const failedNode = async (
+export const failedNode = async (
   state: DevStateType,
 ): Promise<Partial<DevStateType>> => {
   console.log("\n💥 FAILED");
@@ -514,68 +512,14 @@ export {
   reviewRouter,
 } from "./graph/routers.js";
 
+import { buildDevGraph } from "./graph/build-dev-graph.js";
+
+export { buildDevGraph } from "./graph/build-dev-graph.js";
+
 /**
  * ============================================================
  * GRAPH
  * ============================================================
  */
 
-export const devGraph = new StateGraph(DevState)
-
-  .addNode("analyze", analyzeNode)
-
-  .addNode("plan", planNode)
-
-  .addNode("review_plan", reviewPlanNode)
-
-  .addNode("read_context", readContextNode)
-
-  .addNode("refine", refineNode)
-
-  .addNode("plan_gate", planGateNode)
-
-  .addNode("report", reportNode)
-
-  .addNode("failed", failedNode)
-
-  .addEdge(START, "analyze")
-
-  .addEdge("analyze", "plan")
-
-  .addConditionalEdges("plan", afterPlanRouter, {
-    review: "review_plan",
-
-    read: "read_context",
-
-    failed: "failed",
-  })
-
-  .addConditionalEdges("review_plan", reviewRouter, {
-    read: "read_context",
-
-    revise: "plan",
-
-    refine: "refine",
-
-    failed: "failed",
-  })
-
-  .addConditionalEdges("read_context", afterReadRouter, {
-    plan: "plan",
-
-    failed: "failed",
-  })
-
-  .addEdge("refine", "plan_gate")
-
-  .addConditionalEdges("plan_gate", planGateRouter, {
-    report: "report",
-
-    failed: "failed",
-  })
-
-  .addEdge("report", END)
-
-  .addEdge("failed", END)
-
-  .compile();
+export const devGraph = buildDevGraph();

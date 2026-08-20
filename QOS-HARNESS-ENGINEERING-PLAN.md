@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Step 5: Extract Routers`
+**Current task:** `H-ARCH-001 — Step 6: Extract Graph Builder`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -1223,6 +1223,19 @@ Add characterization tests.
 
 Run typecheck/tests.
 
+## 12.13.5 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+Observed change:
+
+- `src/graph/routers.ts` owns the four graph routing decisions;
+- `src/graph.ts` imports and temporarily re-exports those routers;
+- existing characterization tests passed;
+- no intentional routing-semantic change was introduced.
+
+**Next:** Step 6 — extract `StateGraph` assembly without changing graph topology.
+
 ### Step 6 — Extract graph builder
 
 Move graph composition into `graph/build-dev-graph.ts`.
@@ -1526,6 +1539,86 @@ Do not yet:
 - change prompts, schemas, providers, or context logic.
 
 Graph construction is reserved for Step 6.
+
+
+
+## 12.18 Step 6 Detailed Specification — Extract Graph Builder
+
+### Objective
+
+Move `StateGraph` construction out of `src/graph.ts` while preserving the exact current graph topology and runtime behavior.
+
+### New module
+
+```text
+src/graph/build-dev-graph.ts
+```
+
+It owns:
+
+- `new StateGraph(DevState)`;
+- node registration;
+- static edges;
+- conditional edges;
+- `.compile()`.
+
+### Compatibility strategy
+
+During this step, node implementations remain in `src/graph.ts` and are exported so the builder can register them. This is intentionally transitional: Step 6 extracts graph assembly only and does not combine node extraction with graph extraction.
+
+`src/graph.ts` continues exporting:
+
+```ts
+export const devGraph = buildDevGraph();
+```
+
+### Behavioral invariants
+
+Do not change:
+
+- node names;
+- node implementations;
+- edge topology;
+- conditional route maps;
+- START/END placement;
+- router behavior;
+- prompts;
+- schemas;
+- provider calls;
+- model configuration;
+- retry/token configuration;
+- state semantics.
+
+### Acceptance criteria
+
+- [ ] `src/graph/build-dev-graph.ts` exists.
+- [ ] `StateGraph`, `START`, `END`, and `DevState` graph-assembly usage moves out of `src/graph.ts`.
+- [ ] graph topology is byte-for-byte equivalent in intent.
+- [ ] `devGraph` remains exported from `src/graph.ts`.
+- [ ] no new runtime dependency.
+- [ ] `npm run typecheck` passes.
+- [ ] `npm run test:prompt-characterization` passes.
+- [ ] `npm run test:graph-characterization` passes.
+- [ ] `npm run test:tools` passes.
+
+### Gate
+
+```bash
+npm run typecheck && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Suggested commit
+
+```bash
+git commit -m "refactor(graph): extract graph builder"
+```
+
+### Non-goals
+
+Do not extract graph nodes in this step. Do not redesign dependency injection or create a generic graph factory yet. Those decisions should be evaluated after H-ARCH-001 is structurally complete.
 
 
 # 13. Next Task Preview
