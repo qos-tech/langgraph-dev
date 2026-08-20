@@ -1,7 +1,5 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 
-import { z } from "zod";
-
 import { DevState, type DevStateType } from "./state.js";
 
 import { inspectRepository } from "./repository/inspect.js";
@@ -9,6 +7,13 @@ import { inspectRepository } from "./repository/inspect.js";
 import { readFile } from "./repository/tools.js";
 
 import { callNvidiaJson } from "./providers/nvidia.js";
+
+import {
+  ExplorationSchema,
+  ReviewSchema,
+  RefinedSchema,
+  type Exploration,
+} from "./graph/schemas.js";
 
 /**
  * ============================================================
@@ -20,98 +25,6 @@ const PLANNER_MODEL =
   process.env.NVIDIA_PLANNER_MODEL ?? "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 const REVIEW_MODEL = process.env.NVIDIA_REVIEW_MODEL ?? "openai/gpt-oss-20b";
-
-/**
- * ============================================================
- * SCHEMAS
- * ============================================================
- */
-
-const ExplorationSchema = z.object({
-  understanding: z.string().min(1),
-
-  needsMoreContext: z.boolean(),
-
-  filesToRead: z
-    .array(
-      z.object({
-        path: z.string().min(1),
-
-        reason: z.string().min(1),
-      }),
-    )
-    .default([]),
-
-  observations: z.array(z.string()).default([]),
-
-  unknowns: z.array(z.string()).default([]),
-});
-
-const ReviewSchema = z.object({
-  decision: z.enum(["approve_read", "revise_read", "enough_context"]),
-
-  missingEvidence: z
-    .array(
-      z.object({
-        area: z.string().min(1),
-
-        reason: z.string().min(1),
-      }),
-    )
-    .default([]),
-
-  issues: z
-    .array(
-      z.object({
-        severity: z.enum(["low", "medium", "high", "critical"]),
-
-        type: z.string().min(1),
-
-        problem: z.string().min(1),
-
-        evidence: z.string().min(1),
-
-        recommendation: z.string().min(1),
-      }),
-    )
-    .default([]),
-
-  summary: z.string().default(""),
-});
-
-const RefinedSchema = z.object({
-  outcome: z.enum(["changes_required", "already_satisfied", "blocked"]),
-
-  understanding: z.string().min(1),
-
-  changes: z
-    .array(
-      z.object({
-        file: z.string().min(1),
-
-        action: z.enum(["create", "modify", "delete"]),
-
-        description: z.string().min(1),
-      }),
-    )
-    .default([]),
-
-  validation: z
-    .array(
-      z.object({
-        command: z.string().min(1),
-
-        expected: z.string().min(1),
-      }),
-    )
-    .default([]),
-
-  blockingUnknowns: z.array(z.string()).default([]),
-
-  nonBlockingNotes: z.array(z.string()).default([]),
-});
-
-type Exploration = z.infer<typeof ExplorationSchema>;
 
 /**
  * ============================================================
