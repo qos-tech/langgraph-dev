@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Step 6: Extract Graph Builder`
+**Current task:** `H-ARCH-001 — Step 7: Extract Graph Nodes and Remove Circular Dependency`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -1244,6 +1244,31 @@ Keep `src/graph.ts` as compatibility export if beneficial.
 
 Run full available validation.
 
+## 12.13.6 Step 6 Validation Record
+
+**Status:** ✅ Accepted
+
+Observed result:
+
+- `src/graph/build-dev-graph.ts` owns `StateGraph` assembly;
+- node names and graph topology remained unchanged;
+- `src/graph.ts` still exports `devGraph`;
+- validation gates passed in the development environment.
+
+Architectural observation:
+
+Step 6 intentionally introduced a temporary circular dependency:
+
+```text
+src/graph.ts
+  → src/graph/build-dev-graph.ts
+  → src/graph.ts
+```
+
+The cycle is currently operational because the builder only captures imported node bindings and `buildDevGraph()` is invoked after node initialization, but retaining this dependency would violate the intended architectural direction and increase future initialization risk.
+
+**Decision:** add Step 7 to remove the cycle by extracting graph nodes.
+
 ### Step 7 — Review diff
 
 Verify:
@@ -1619,6 +1644,158 @@ git commit -m "refactor(graph): extract graph builder"
 ### Non-goals
 
 Do not extract graph nodes in this step. Do not redesign dependency injection or create a generic graph factory yet. Those decisions should be evaluated after H-ARCH-001 is structurally complete.
+
+
+
+## 12.19 Step 7 Detailed Specification — Extract Graph Nodes and Remove Circular Dependency
+
+### Objective
+
+Move graph node implementations from `src/graph.ts` to `src/graph/nodes.ts` and remove the temporary circular dependency created by Step 6.
+
+### Problem being solved
+
+After Step 6:
+
+```text
+src/graph.ts
+  → src/graph/build-dev-graph.ts
+  → src/graph.ts
+```
+
+The builder imports nodes from the compatibility module that itself imports the builder.
+
+Although current ESM evaluation allows this shape to work in the present implementation, the dependency direction is undesirable and fragile.
+
+### Target dependency direction
+
+```text
+src/graph.ts
+  → build-dev-graph.ts
+       → nodes.ts
+       → routers.ts
+       → state.ts
+
+nodes.ts
+  → schemas.ts
+  → prompts.ts
+  → context.ts
+  → repository/*
+  → providers/*
+```
+
+No module under `src/graph/` should import `src/graph.ts`.
+
+### New module
+
+```text
+src/graph/nodes.ts
+```
+
+It owns the current implementations of:
+
+- `analyzeNode`
+- `planNode`
+- `reviewPlanNode`
+- `readContextNode`
+- `refineNode`
+- `planGateNode`
+- `reportNode`
+- `failedNode`
+
+It also owns the node-local model constants currently used by planner/reviewer/refine execution.
+
+### Compatibility boundary
+
+After Step 7, `src/graph.ts` becomes a small public/compatibility boundary that:
+
+- re-exports context helpers;
+- re-exports prompt builders;
+- re-exports routers;
+- re-exports nodes;
+- re-exports `buildDevGraph`;
+- exports the compiled `devGraph`.
+
+### Behavioral invariants
+
+Do not change:
+
+- node implementation logic;
+- node names;
+- graph topology;
+- prompts;
+- schemas;
+- model defaults;
+- token/retry settings;
+- provider behavior;
+- repository-read behavior;
+- state semantics;
+- router behavior;
+- log messages.
+
+### Acceptance criteria
+
+- [ ] `src/graph/nodes.ts` exists.
+- [ ] all eight node implementations move out of `src/graph.ts`.
+- [ ] `src/graph/build-dev-graph.ts` imports nodes from `./nodes.js`.
+- [ ] `src/graph/build-dev-graph.ts` no longer imports `../graph.js`.
+- [ ] no module under `src/graph/` imports the compatibility boundary `src/graph.ts`.
+- [ ] `src/graph.ts` is reduced to a small compatibility/public API layer.
+- [ ] `devGraph` remains exported from `src/graph.ts`.
+- [ ] existing context/router/prompt exports remain compatible.
+- [ ] no new runtime dependency is introduced.
+- [ ] `npm run typecheck` passes.
+- [ ] `npm run test:prompt-characterization` passes.
+- [ ] `npm run test:graph-characterization` passes.
+- [ ] `npm run test:tools` passes.
+
+### Gate
+
+```bash
+npm run typecheck && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Suggested commit
+
+```bash
+git commit -m "refactor(graph): extract nodes and remove circular dependency"
+```
+
+### Non-goals
+
+Do not yet:
+
+- introduce dependency injection for nodes;
+- create one file per node;
+- introduce generic node factories;
+- change model/provider selection;
+- add telemetry;
+- change planning convergence;
+- optimize context;
+- alter prompts.
+
+### H-ARCH-001 completion decision after Step 7
+
+If Step 7 passes, stop and reassess before adding more structural refactors.
+
+Expected resulting structure:
+
+```text
+src/
+├── graph.ts
+└── graph/
+    ├── schemas.ts
+    ├── context.ts
+    ├── prompts.ts
+    ├── routers.ts
+    ├── nodes.ts
+    └── build-dev-graph.ts
+```
+
+At that point, H-ARCH-001 should be considered structurally complete unless validation reveals a concrete reason for another extraction.
 
 
 # 13. Next Task Preview
