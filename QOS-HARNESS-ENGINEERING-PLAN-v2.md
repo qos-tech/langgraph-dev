@@ -3,7 +3,8 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Modularize Core Harness Without Behavior Changes`
+**Current task:** `H-ARCH-001 — Step 2: Extract Graph Schemas`
+**Task status:** Approved — Step 1 in progress
 
 ---
 
@@ -1082,9 +1083,34 @@ provider abstraction explicitly deferred to H-ARCH-002.
 
 ---
 
+## 12.13.1 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+Validated on the real development environment:
+
+- `npm run typecheck` — PASS
+- `npm run test:graph-characterization` — PASS
+- `npm run test:tools` — PASS
+
+Behavior intentionally characterized includes:
+
+- `afterPlanRouter`
+- `reviewRouter`
+- `afterReadRouter`
+- `planGateRouter`
+- request normalization
+- context helper behavior
+
+The warning/log lines emitted during characterization are expected observations of current behavior, not test failures.
+
+**Next:** Step 2 — Extract graph structured-output schemas without semantic changes.
+
 ## 12.14 Implementation Sequence
 
-### Step 1 — Characterize current behavior
+### Step 1 — Characterize current behavior ✅
+
+**Status: Accepted.**
 
 Before moving code:
 
@@ -1095,7 +1121,9 @@ Before moving code:
 - record node list and graph edges;
 - run baseline typecheck/tests.
 
-### Step 2 — Extract graph schemas
+### Step 2 — Extract graph schemas 🚧
+
+**Status: In progress.**
 
 Move structured-output schemas without semantic changes.
 
@@ -1287,6 +1315,15 @@ We are currently discussing and approving:
 
 > **H-ARCH-001 — Modularize Core Harness Without Behavior Changes**
 
-No implementation should begin until this spec is accepted or amended.
+Spec approved on 2026-08-20.
 
-Once accepted, implementation proceeds **Step 1 → Step 8**, with validation after each meaningful extraction.
+Implementation proceeds **Step 1 → Step 8**, with validation after each meaningful extraction.
+
+### H-ARCH-001 progress
+
+- [x] Spec approved.
+- [x] Step 1 characterization-test implementation prepared against the uploaded repository snapshot.
+- [ ] Run `npm run typecheck` in the source development environment.
+- [ ] Run `npm run test:graph-characterization`.
+- [ ] Confirm baseline tests before Step 2.
+- [ ] Step 2 — Extract graph schemas.
