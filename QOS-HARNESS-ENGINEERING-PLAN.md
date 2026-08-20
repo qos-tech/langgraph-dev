@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-001 — Step 4: Extract Prompt Builders`
+**Current task:** `H-ARCH-001 — Step 5: Extract Routers`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -1182,13 +1182,38 @@ Validation expected/used for acceptance:
 
 **Next:** Step 4 — extract prompt builders without changing prompt semantics.
 
-### Step 4 — Extract prompt builders 🚧
+### Step 4 — Extract prompt builders ✅
 
-**Status: In progress.**
+**Status: Accepted.**
 
 Move prompt text verbatim.
 
 Run typecheck.
+
+## 12.13.4 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+Reference commit:
+
+`ee9a7b84c85d25dbb72aa39a44867405a60e3c02`
+
+Observed change:
+
+- `src/graph/prompts.ts` owns planner, reviewer, and refine prompt construction;
+- `src/test-prompt-characterization.ts` characterizes critical prompt contracts;
+- `package.json` exposes the prompt characterization test as an official script;
+- `src/graph.ts` retains orchestration and provider calls;
+- no intentional model, router, provider, retry, state, or repository behavior changed.
+
+Acceptance gates:
+
+- `npm run typecheck`
+- `npm run test:prompt-characterization`
+- `npm run test:graph-characterization`
+- `npm run test:tools`
+
+**Next:** Step 5 — extract graph routing decisions without semantic changes.
 
 ### Step 5 — Extract routers
 
@@ -1402,6 +1427,105 @@ Do not yet:
 - change context ranking/budgeting.
 
 Those belong to later architecture/context tasks.
+
+
+
+## 12.17 Step 5 Detailed Specification — Extract Routers
+
+### Objective
+
+Move graph routing decisions out of `src/graph.ts` into a dedicated module without changing any routing semantics.
+
+### New module
+
+```text
+src/graph/routers.ts
+```
+
+It owns:
+
+```ts
+afterPlanRouter
+reviewRouter
+afterReadRouter
+planGateRouter
+```
+
+### Responsibilities
+
+`src/graph/routers.ts` may:
+
+- inspect `DevStateType`;
+- return graph route labels;
+- preserve current diagnostic logging.
+
+It must not:
+
+- mutate state;
+- call providers;
+- read files;
+- build prompts;
+- alter counters;
+- introduce new routing decisions;
+- fix known routing behavior during this extraction.
+
+### Compatibility
+
+`src/graph.ts` temporarily re-exports the routers so existing characterization tests remain valid without being rewritten during the refactor.
+
+### Behavioral invariants
+
+The following current behavior must remain unchanged during Step 5:
+
+- `afterPlanRouter` may bypass redundant review after a `revise_read` plan contains valid files;
+- `reviewRouter` routes `enough_context` to `refine`;
+- the current `planningAttempts >= maxPlanningAttempts` ordering remains unchanged;
+- `approve_read` with no files and no remaining context requirement routes to `refine`;
+- `afterReadRouter` routes failed state to `failed`, otherwise to `plan`;
+- `planGateRouter` requires no `failureReason` and a present `refinedPlan` before routing to `report`.
+
+Known questionable behavior is characterized, not corrected, in this step.
+
+### Acceptance criteria
+
+- [ ] `src/graph/routers.ts` exists.
+- [ ] All four router functions are removed from their implementation location in `src/graph.ts`.
+- [ ] `src/graph.ts` imports the four routers.
+- [ ] Existing router exports remain compatible for characterization tests.
+- [ ] No router logic changes.
+- [ ] No new runtime dependency.
+- [ ] `npm run typecheck` passes.
+- [ ] `npm run test:prompt-characterization` passes.
+- [ ] `npm run test:graph-characterization` passes.
+- [ ] `npm run test:tools` passes.
+
+### Gate
+
+```bash
+npm run typecheck && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Suggested commit
+
+```bash
+git commit -m "refactor(graph): extract routers"
+```
+
+### Non-goals
+
+Do not yet:
+
+- correct retry/attempt semantics;
+- redesign route labels;
+- introduce generic router abstractions;
+- change graph topology;
+- move graph construction;
+- change prompts, schemas, providers, or context logic.
+
+Graph construction is reserved for Step 6.
 
 
 # 13. Next Task Preview
