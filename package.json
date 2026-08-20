@@ -9,7 +9,8 @@
     "test:tools": "tsx src/test-tools.ts",
     "test:structured": "tsx src/test-structured.ts",
     "test:nvidia": "node --env-file=.env --import tsx src/test-nvidia-planner.ts",
-    "test:nvidia-review": "node --env-file=.env --import tsx src/test-nvidia-review.ts"
+    "test:nvidia-review": "node --env-file=.env --import tsx src/test-nvidia-review.ts",
+    "test:graph-characterization": "tsx src/test-graph-characterization.ts"
   },
   "keywords": [],
   "author": "",

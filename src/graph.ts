@@ -119,7 +119,7 @@ type Exploration = z.infer<typeof ExplorationSchema>;
  * ============================================================
  */
 
-function listFiles(state: DevStateType): string {
+export function listFiles(state: DevStateType): string {
   const files = state.repositoryContext?.files ?? [];
 
   if (files.length === 0) {
@@ -129,7 +129,7 @@ function listFiles(state: DevStateType): string {
   return files.map((file) => `- ${file}`).join("\n");
 }
 
-function packageContext(state: DevStateType): string {
+export function packageContext(state: DevStateType): string {
   const packageJson = state.repositoryContext?.packageJson;
 
   if (!packageJson) {
@@ -139,7 +139,7 @@ function packageContext(state: DevStateType): string {
   return JSON.stringify(packageJson, null, 2);
 }
 
-function knownFileContext(state: DevStateType, maxChars = 40_000): string {
+export function knownFileContext(state: DevStateType, maxChars = 40_000): string {
   const entries = Object.entries(state.fileContents);
 
   if (entries.length === 0) {
@@ -170,7 +170,7 @@ function knownFileContext(state: DevStateType, maxChars = 40_000): string {
   return output;
 }
 
-function reviewFeedback(state: DevStateType): string {
+export function reviewFeedback(state: DevStateType): string {
   if (!state.planReview) {
     return "Nenhum review anterior.";
   }
@@ -184,7 +184,7 @@ function reviewFeedback(state: DevStateType): string {
  * ============================================================
  */
 
-function normalizeRequests(
+export function normalizeRequests(
   state: DevStateType,
   plan: Exploration,
 ): Exploration {
@@ -992,7 +992,7 @@ const failedNode = async (
  * ============================================================
  */
 
-const afterPlanRouter = (state: DevStateType): "review" | "read" | "failed" => {
+export const afterPlanRouter = (state: DevStateType): "review" | "read" | "failed" => {
   const plan = state.explorationPlan;
 
   if (!plan) {
@@ -1014,7 +1014,7 @@ const afterPlanRouter = (state: DevStateType): "review" | "read" | "failed" => {
   return "review";
 };
 
-const reviewRouter = (
+export const reviewRouter = (
   state: DevStateType,
 ): "read" | "revise" | "refine" | "failed" => {
   const review = state.planReview;
@@ -1058,7 +1058,7 @@ const reviewRouter = (
   return "failed";
 };
 
-const afterReadRouter = (state: DevStateType): "plan" | "failed" => {
+export const afterReadRouter = (state: DevStateType): "plan" | "failed" => {
   if (state.status === "failed") {
     return "failed";
   }
@@ -1066,7 +1066,7 @@ const afterReadRouter = (state: DevStateType): "plan" | "failed" => {
   return "plan";
 };
 
-const planGateRouter = (state: DevStateType): "report" | "failed" => {
+export const planGateRouter = (state: DevStateType): "report" | "failed" => {
   if (state.failureReason) {
     return "failed";
   }
