@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 7: Add Claude CLI Provider Adapter`
-**Task status:** In progress — Step 7
+**Current task:** `H-ARCH-002 — Step 8: Cross-Provider Acceptance`
+**Task status:** In progress — Step 8
 
 ---
 
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 7 — Add Claude CLI Provider Adapter
+**Current step:** Step 8 — Cross-Provider Acceptance
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2689,7 +2689,7 @@ Graph LLM nodes now consume role bindings and `StructuredLlmProvider.generateStr
 
 ## H-ARCH-002 Step 7 — Add Claude CLI Provider Adapter
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2761,6 +2761,213 @@ git commit -m "feat(provider): add Claude CLI adapter"
 Step 7 is complete when Claude CLI satisfies the provider contract in deterministic tests and one real smoke invocation, while NVIDIA remains the default composition and graph code is unchanged.
 
 **Next:** Step 8 — Cross-Provider Acceptance.
+
+
+## H-ARCH-002 Step 7 Validation Record
+
+**Status:** ✅ Accepted
+
+`ClaudeCliProvider` now satisfies `StructuredLlmProvider` through deterministic
+process-runner tests and one explicit live Claude CLI smoke invocation.
+
+The adapter keeps Claude in provider mode: tools are disabled, session
+persistence is disabled, and the graph/default NVIDIA composition remain
+unchanged.
+
+The full Step 7 deterministic gate and live smoke passed.
+
+**Decision:** run the same provider-neutral acceptance scenario through both
+concrete adapters and prove a mixed Claude/NVIDIA graph composition without
+editing graph nodes.
+
+
+## H-ARCH-002 Step 8 — Cross-Provider Acceptance
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Prove that NVIDIA and Claude CLI satisfy the same current structured-generation
+contract and can coexist in one role composition without provider-specific
+graph branches.
+
+This step is acceptance/characterization work. It does not redesign the
+provider contract.
+
+### Shared acceptance scenario
+
+Both providers receive the same provider-neutral request shape:
+
+```text
+model
+prompt
+validate
+maxTokens
+maxRetries
+```
+
+and must return the same validated application value:
+
+```json
+{
+  "ok": true,
+  "source": "portable"
+}
+```
+
+The deterministic test uses the real adapter classes with mocked transport:
+
+```text
+NvidiaProvider
+  → mocked fetch
+
+ClaudeCliProvider
+  → injected mocked CLI runner
+```
+
+No external API or Claude quota is consumed by the deterministic gate.
+
+### Mixed composition proof
+
+The same deterministic test constructs:
+
+```text
+planner  → ClaudeCliProvider
+reviewer → NvidiaProvider
+refiner  → ClaudeCliProvider
+```
+
+and passes those bindings to `buildDevGraph()`.
+
+No graph-node edit or provider-specific branch is allowed.
+
+### Live acceptance
+
+After the deterministic gate, one explicit live scenario is run through each
+real provider:
+
+```text
+NVIDIA API
+Claude Code CLI
+```
+
+The live script uses the same prompt and application validator for both.
+
+Environment overrides are available:
+
+```text
+NVIDIA_CROSS_PROVIDER_MODEL
+CLAUDE_CROSS_PROVIDER_MODEL
+```
+
+Defaults:
+
+```text
+NVIDIA: nvidia/nemotron-3.5-lightning-30b-a3b
+Claude: sonnet
+```
+
+### Portability finding retained from Step 7
+
+`maxTokens` and `maxRetries` remain accepted by the neutral request contract,
+but Claude CLI has no equivalent semantics and intentionally ignores them.
+
+Step 8 does not hide this mismatch by mapping them to unrelated Claude CLI
+flags. Passing the same request through both adapters proves the core structured
+generation contract, but does not prove that execution-budget semantics are
+portable.
+
+This becomes an explicit Step 9 architecture-review decision:
+
+```text
+keep neutral execution budgets
+vs.
+move execution policy into provider/role-specific configuration
+vs.
+split portable request data from adapter capabilities
+```
+
+### Files in this step
+
+Create:
+
+```text
+src/test-cross-provider-acceptance.ts
+src/test-cross-provider-live.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+src/providers/default-composition.ts
+src/providers/role-composition.ts
+src/graph/nodes.ts
+src/graph/build-dev-graph.ts
+```
+
+### Deterministic acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Live acceptance gate
+
+Run separately because it consumes real provider usage:
+
+```bash
+npm run test:cross-provider-live
+```
+
+### Acceptance criteria
+
+- [ ] the same structured request scenario succeeds through `NvidiaProvider`.
+- [ ] the same structured request scenario succeeds through `ClaudeCliProvider`.
+- [ ] both results pass the same application validator.
+- [ ] deterministic acceptance uses no real NVIDIA or Claude request.
+- [ ] mixed Claude/NVIDIA role bindings compile into a graph.
+- [ ] graph nodes remain unchanged.
+- [ ] provider contract remains unchanged.
+- [ ] default runtime composition remains NVIDIA.
+- [ ] one real NVIDIA acceptance call succeeds.
+- [ ] one real Claude CLI acceptance call succeeds.
+- [ ] execution-budget portability mismatch is explicitly carried into Step 9.
+
+### Commit
+
+```bash
+git commit -m "test(provider): verify cross-provider acceptance"
+```
+
+### Exit condition
+
+Step 8 is complete when both concrete providers satisfy the same core
+structured-output scenario, mixed role composition builds without graph edits,
+all deterministic gates pass, and the live two-provider acceptance succeeds.
+
+**Next:** Step 9 — Architecture Review / Release Decision. Decide the
+execution-budget contract issue, verify dependency direction, and determine
+whether H-ARCH-002 is ready for the next alpha release.
+
 
 # Release Procedure — v0.1.0-alpha.1
 

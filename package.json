@@ -17,7 +17,9 @@
     "test:provider-composition": "tsx src/test-provider-composition.ts",
     "test:provider-injection": "tsx src/test-provider-injection.ts",
     "test:claude-provider": "tsx src/test-claude-provider.ts",
-    "test:claude-smoke": "tsx src/test-claude-smoke.ts"
+    "test:claude-smoke": "tsx src/test-claude-smoke.ts",
+    "test:cross-provider": "tsx src/test-cross-provider-acceptance.ts",
+    "test:cross-provider-live": "node --env-file=.env --import tsx src/test-cross-provider-live.ts"
   },
   "keywords": [],
   "author": "",
