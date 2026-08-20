@@ -1,4 +1,8 @@
-import { buildDevGraph } from "./graph/build-dev-graph.js";
+import { defaultLlmRoleBindings } from "./providers/default-composition.js";
+
+import { buildDevGraph as buildInjectedDevGraph } from "./graph/build-dev-graph.js";
+
+import { createGraphNodes } from "./graph/nodes.js";
 
 export {
   knownFileContext,
@@ -21,7 +25,12 @@ export {
   reviewRouter,
 } from "./graph/routers.js";
 
-export {
+export { createGraphNodes } from "./graph/nodes.js";
+export { buildDevGraph as buildInjectedDevGraph } from "./graph/build-dev-graph.js";
+
+const defaultGraphNodes = createGraphNodes(defaultLlmRoleBindings);
+
+export const {
   analyzeNode,
   failedNode,
   planGateNode,
@@ -30,8 +39,10 @@ export {
   refineNode,
   reportNode,
   reviewPlanNode,
-} from "./graph/nodes.js";
+} = defaultGraphNodes;
 
-export { buildDevGraph } from "./graph/build-dev-graph.js";
+export function buildDevGraph() {
+  return buildInjectedDevGraph(defaultLlmRoleBindings);
+}
 
 export const devGraph = buildDevGraph();

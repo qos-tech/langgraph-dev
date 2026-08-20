@@ -1,10 +1,11 @@
 import type { DevStateType } from "../state.js";
 
+import type { LlmRoleBindings } from "../providers/role-composition.js";
+import { resolveLlmRole } from "../providers/role-composition.js";
+
 import { inspectRepository } from "../repository/inspect.js";
 
 import { readFile } from "../repository/tools.js";
-
-import { callNvidiaJson } from "../providers/nvidia.js";
 
 import {
   ExplorationSchema,
@@ -19,17 +20,6 @@ import {
   buildRefinePrompt,
   buildReviewerPrompt,
 } from "./prompts.js";
-
-/**
- * ============================================================
- * MODELS
- * ============================================================
- */
-
-const PLANNER_MODEL =
-  process.env.NVIDIA_PLANNER_MODEL ?? "nvidia/nemotron-3.5-lightning-30b-a3b";
-
-const REVIEW_MODEL = process.env.NVIDIA_REVIEW_MODEL ?? "openai/gpt-oss-20b";
 
 /**
  * ============================================================
@@ -67,50 +57,46 @@ export const analyzeNode = async (
 
 /**
  * ============================================================
- * PLAN — NEMOTRON
+ * PLAN
  * ============================================================
  */
 
-export const planNode = async (
-  state: DevStateType,
-): Promise<Partial<DevStateType>> => {
-  console.log("\n🧠 PLAN — NEMOTRON");
+function createPlanNode(llmRoleBindings: LlmRoleBindings) {
+  return async (
+    state: DevStateType,
+  ): Promise<Partial<DevStateType>> => {
+    const binding = resolveLlmRole(llmRoleBindings, "planner");
 
-  const attempt = state.planningAttempts + 1;
+    console.log(`\n🧠 PLAN — ${binding.model}`);
 
-  console.log(`Planning attempt: ${attempt}/${state.maxPlanningAttempts}`);
+    const attempt = state.planningAttempts + 1;
 
-  const prompt = buildPlannerPrompt(state);
+    console.log(`Planning attempt: ${attempt}/${state.maxPlanningAttempts}`);
 
-  const result = await callNvidiaJson(
-    PLANNER_MODEL,
-    prompt,
-    (value) => ExplorationSchema.parse(value),
-    {
-      maxTokens: 1800,
+    const prompt = buildPlannerPrompt(state);
 
-      maxRetries: 6,
-    },
-  );
+    const result = await binding.provider.generateStructured({
+      model: binding.model,
+      prompt,
+      validate: (value) => ExplorationSchema.parse(value),
+      maxTokens: binding.maxTokens,
+      maxRetries: binding.maxRetries,
+    });
 
-  const plan = normalizeRequests(state, result.data);
+    const plan = normalizeRequests(state, result.data);
 
-  console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
+    console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
 
-  console.dir(plan, {
-    depth: null,
-  });
+    console.dir(plan, { depth: null });
 
-  return {
-    status: "planning",
-
-    planningAttempts: attempt,
-
-    explorationPlan: plan,
-
-    recentlyReadFiles: [],
+    return {
+      status: "planning",
+      planningAttempts: attempt,
+      explorationPlan: plan,
+      recentlyReadFiles: [],
+    };
   };
-};
+}
 
 /**
  * ============================================================
@@ -118,48 +104,41 @@ export const planNode = async (
  * ============================================================
  */
 
-export const reviewPlanNode = async (
-  state: DevStateType,
-): Promise<Partial<DevStateType>> => {
-  console.log(`\n🔍 REVIEW PLAN — ${REVIEW_MODEL}`);
+function createReviewPlanNode(llmRoleBindings: LlmRoleBindings) {
+  return async (
+    state: DevStateType,
+  ): Promise<Partial<DevStateType>> => {
+    const binding = resolveLlmRole(llmRoleBindings, "reviewer");
 
-  const plan = state.explorationPlan;
+    console.log(`\n🔍 REVIEW PLAN — ${binding.model}`);
 
-  if (!plan) {
-    throw new Error("Exploration plan required.");
-  }
+    const plan = state.explorationPlan;
 
-  const prompt = buildReviewerPrompt(state);
+    if (!plan) {
+      throw new Error("Exploration plan required.");
+    }
 
-  const reviewMaxTokens = REVIEW_MODEL.startsWith("openai/gpt-oss")
-    ? 1800
-    : 1400;
+    const prompt = buildReviewerPrompt(state);
 
-  const result = await callNvidiaJson(
-    REVIEW_MODEL,
-    prompt,
-    (value) => ReviewSchema.parse(value),
-    {
-      maxTokens: reviewMaxTokens,
+    const result = await binding.provider.generateStructured({
+      model: binding.model,
+      prompt,
+      validate: (value) => ReviewSchema.parse(value),
+      maxTokens: binding.maxTokens,
+      maxRetries: binding.maxRetries,
+    });
 
-      maxRetries: 6,
-    },
-  );
+    console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
 
-  console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
+    console.dir(result.data, { depth: null });
 
-  console.dir(result.data, {
-    depth: null,
-  });
-
-  return {
-    status: "reviewing_plan",
-
-    reviewAttempts: state.reviewAttempts + 1,
-
-    planReview: result.data,
+    return {
+      status: "reviewing_plan",
+      reviewAttempts: state.reviewAttempts + 1,
+      planReview: result.data,
+    };
   };
-};
+}
 
 /**
  * ============================================================
@@ -255,36 +234,34 @@ export const readContextNode = async (
  * ============================================================
  */
 
-export const refineNode = async (
-  state: DevStateType,
-): Promise<Partial<DevStateType>> => {
-  console.log("\n🎯 REFINE — NEMOTRON");
+function createRefineNode(llmRoleBindings: LlmRoleBindings) {
+  return async (
+    state: DevStateType,
+  ): Promise<Partial<DevStateType>> => {
+    const binding = resolveLlmRole(llmRoleBindings, "refiner");
 
-  const prompt = buildRefinePrompt(state);
+    console.log(`\n🎯 REFINE — ${binding.model}`);
 
-  const result = await callNvidiaJson(
-    PLANNER_MODEL,
-    prompt,
-    (value) => RefinedSchema.parse(value),
-    {
-      maxTokens: 2600,
+    const prompt = buildRefinePrompt(state);
 
-      maxRetries: 6,
-    },
-  );
+    const result = await binding.provider.generateStructured({
+      model: binding.model,
+      prompt,
+      validate: (value) => RefinedSchema.parse(value),
+      maxTokens: binding.maxTokens,
+      maxRetries: binding.maxRetries,
+    });
 
-  console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
+    console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
 
-  console.dir(result.data, {
-    depth: null,
-  });
+    console.dir(result.data, { depth: null });
 
-  return {
-    status: "refining_plan",
-
-    refinedPlan: result.data,
+    return {
+      status: "refining_plan",
+      refinedPlan: result.data,
+    };
   };
-};
+}
 
 /**
  * ============================================================
@@ -477,3 +454,22 @@ export const failedNode = async (
     status: "failed",
   };
 };
+
+/**
+ * ============================================================
+ * NODE FACTORY
+ * ============================================================
+ */
+
+export function createGraphNodes(llmRoleBindings: LlmRoleBindings) {
+  return {
+    analyzeNode,
+    planNode: createPlanNode(llmRoleBindings),
+    reviewPlanNode: createReviewPlanNode(llmRoleBindings),
+    readContextNode,
+    refineNode: createRefineNode(llmRoleBindings),
+    planGateNode,
+    reportNode,
+    failedNode,
+  };
+}

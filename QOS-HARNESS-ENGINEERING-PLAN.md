@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 5: Provider Resolution / Composition`
-**Task status:** In progress — Step 5
+**Current task:** `H-ARCH-002 — Step 6: Inject Providers into Graph Nodes`
+**Task status:** In progress — Step 6
 
 ---
 
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 5 — Provider Resolution / Composition
+**Current step:** Step 6 — Inject Providers into Graph Nodes
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2491,7 +2491,7 @@ dependencies.
 
 ## H-ARCH-002 Step 5 — Provider Resolution / Composition
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2623,6 +2623,60 @@ deterministic, testable, and isolated from graph code.
 **Next:** Step 6 — inject the composed role bindings into graph nodes and remove
 the direct `callNvidiaJson` dependency.
 
+
+
+
+## H-ARCH-002 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+Role-to-provider/model/budget composition is now explicit and deterministic. The full Step 5 gate passed.
+
+**Decision:** inject the characterized bindings into graph construction and remove direct NVIDIA dependencies from graph nodes.
+
+## H-ARCH-002 Step 6 — Inject Providers into Graph Nodes
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Remove direct NVIDIA dependency and node-local provider/model policy from `src/graph/nodes.ts`. Planner, reviewer, and refiner must consume only `LlmRoleBindings` and `StructuredLlmProvider`.
+
+### Architecture
+
+```text
+graph.ts composition root
+  → defaultLlmRoleBindings
+  → buildDevGraph(bindings)
+  → createGraphNodes(bindings)
+  → resolveLlmRole(...)
+  → StructuredLlmProvider.generateStructured(...)
+```
+
+### Acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+```bash
+git commit -m "refactor(graph): inject LLM provider bindings"
+```
+
+### Exit condition
+
+Changing a role's provider no longer requires editing `src/graph/nodes.ts`.
+
+**Next:** Step 7 — add a second `StructuredLlmProvider` implementation.
 
 # Release Procedure — v0.1.0-alpha.1
 

@@ -13,7 +13,9 @@
     "test:graph-characterization": "tsx src/test-graph-characterization.ts",
     "test:prompt-characterization": "tsx src/test-prompt-characterization.ts",
     "test:provider-characterization": "tsx src/test-provider-characterization.ts",
-    "test:provider-contract": "tsx src/test-provider-contract.ts"
+    "test:provider-contract": "tsx src/test-provider-contract.ts",
+    "test:provider-composition": "tsx src/test-provider-composition.ts",
+    "test:provider-injection": "tsx src/test-provider-injection.ts"
   },
   "keywords": [],
   "author": "",
