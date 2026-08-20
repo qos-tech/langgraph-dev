@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `Release v0.1.0-alpha.2`
-****Task status:** In progress — Step 1
+**Current task:** `H-ARCH-003 — Step 2: Define Provider Capabilities Contract`
+**Task status:** In progress — Step 2
 
 ---
 
@@ -3237,7 +3237,7 @@ Verified outcomes:
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 1 — Characterize Execution Policy Differences
+**Current step:** Step 2 — Define Provider Capabilities Contract
 **Release baseline:** `v0.1.0-alpha.2`
 
 ## Milestone objective
@@ -3276,7 +3276,7 @@ The sequence may be reduced if Step 1 evidence proves that a planned abstraction
 
 ## H-ARCH-003 Step 1 — Characterize Execution Policy Differences
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -3433,6 +3433,206 @@ git commit -m "test(provider): characterize execution policy differences"
 Step 1 is complete when the current provider execution-policy asymmetries are protected by deterministic tests and the full regression gate passes.
 
 Only then may Step 2 decide whether a provider-capabilities contract is actually justified by evidence.
+
+
+## H-ARCH-003 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The deterministic execution-policy characterization gate passed.
+
+Evidence frozen by Step 1:
+
+- NVIDIA maps `maxTokens` to the concrete `max_tokens` request control;
+- NVIDIA owns HTTP/network retry behavior inside the adapter;
+- Claude CLI has no equivalent for `maxTokens`;
+- Claude CLI has no equivalent for `maxRetries`;
+- Claude does not misuse `--max-turns` as retry policy;
+- neither adapter currently exposes explicit timeout control;
+- Claude execution is runner/process based;
+- both adapters normalize usage through the same provider-neutral result shape.
+
+**Decision:** Step 2 may define capability metadata, but only for semantic
+controls that the orchestrator can meaningfully reason about.
+
+---
+
+## H-ARCH-003 Step 2 — Define Provider Capabilities Contract
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Define the smallest capability contract justified by Step 1 evidence without
+changing provider execution behavior or runtime role policy.
+
+### Architectural decision
+
+Add two provider-neutral contracts:
+
+```ts
+type StructuredLlmProviderCapabilities = Readonly<{
+  supportsOutputTokenLimit: boolean;
+  supportsTransportRetries: boolean;
+}>;
+
+interface CapabilityAwareStructuredLlmProvider
+  extends StructuredLlmProvider {
+  readonly capabilities: StructuredLlmProviderCapabilities;
+}
+```
+
+The existing `StructuredLlmProvider` remains unchanged.
+
+This is deliberate.
+
+Step 2 defines and proves capability metadata without simultaneously forcing
+all role bindings/test doubles to become capability-aware or redesigning
+execution policy. Promotion of capability awareness into runtime composition
+belongs to later H-ARCH-003 steps.
+
+### Why these two capabilities
+
+Step 1 produced concrete cross-provider evidence for exactly two semantic
+execution controls:
+
+| Capability | NVIDIA | Claude CLI |
+| --- | --- | --- |
+| output token limit | supported | unsupported |
+| adapter-owned transport retries | supported | unsupported |
+
+These controls are observable, semantically meaningful, and potentially useful
+to orchestration.
+
+### What is intentionally excluded
+
+Do not add capability flags for:
+
+```text
+processBased
+httpBased
+nativeStructuredOutput
+explicitTimeout
+providerName
+modelFamily
+```
+
+Reasons:
+
+- process/HTTP lifecycle is currently an adapter implementation detail;
+- both providers already satisfy the structured-output application contract;
+- Step 1 proved neither adapter has explicit timeout support yet;
+- provider/model identity belongs to composition, not capabilities.
+
+Capability metadata should answer:
+
+> what semantic execution control can this provider honor?
+
+It should not become a generic description of provider internals.
+
+### Provider declarations
+
+NVIDIA:
+
+```text
+supportsOutputTokenLimit = true
+supportsTransportRetries = true
+```
+
+Claude CLI:
+
+```text
+supportsOutputTokenLimit = false
+supportsTransportRetries = false
+```
+
+No runtime behavior changes.
+
+### Files
+
+Create:
+
+```text
+src/test-provider-capabilities.ts
+```
+
+Modify:
+
+```text
+src/providers/contracts.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/graph/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- remove `maxTokens` or `maxRetries` from `StructuredLlmRequest`;
+- make role bindings capability-aware;
+- introduce portable execution policy;
+- introduce timeout controls;
+- move retry ownership;
+- add provider fallback;
+- expose provider lifecycle details;
+- change NVIDIA or Claude request behavior;
+- change graph nodes.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] capability type is provider-neutral.
+- [ ] capability-aware provider extends, rather than replaces, the existing base contract.
+- [ ] NVIDIA advertises only capabilities it currently honors.
+- [ ] Claude CLI explicitly advertises unsupported token-limit/retry controls.
+- [ ] capability metadata does not expose lifecycle/transport implementation details.
+- [ ] role bindings remain unchanged.
+- [ ] graph remains unchanged.
+- [ ] provider execution behavior remains unchanged.
+- [ ] deterministic capability test passes.
+- [ ] Step 1 characterization remains green.
+- [ ] all alpha.2 regression gates remain green.
+
+### Commit
+
+```bash
+git commit -m "feat(provider): define execution capabilities"
+```
+
+### Exit condition
+
+Step 2 is complete when provider capability metadata is explicit and verified
+without changing runtime policy.
+
+**Next:** Step 3 — Separate Portable Policy from Provider Hints.
+
 
 # Release Procedure — v0.1.0-alpha.2
 

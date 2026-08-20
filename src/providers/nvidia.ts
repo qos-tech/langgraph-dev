@@ -1,7 +1,8 @@
 import { performance } from "node:perf_hooks";
 
 import type {
-  StructuredLlmProvider,
+  CapabilityAwareStructuredLlmProvider,
+  StructuredLlmProviderCapabilities,
   StructuredLlmRequest,
   StructuredLlmResult,
 } from "./contracts.js";
@@ -481,7 +482,14 @@ export async function callNvidiaJson<T>(
  * provider-neutral contract. The adapter also maps NVIDIA token-usage field
  * names into the provider-neutral contract.
  */
-export class NvidiaProvider implements StructuredLlmProvider {
+const NVIDIA_CAPABILITIES = {
+  supportsOutputTokenLimit: true,
+  supportsTransportRetries: true,
+} as const satisfies StructuredLlmProviderCapabilities;
+
+export class NvidiaProvider implements CapabilityAwareStructuredLlmProvider {
+  readonly capabilities = NVIDIA_CAPABILITIES;
+
   async generateStructured<T>(
     request: StructuredLlmRequest<T>,
   ): Promise<StructuredLlmResult<T>> {
@@ -533,5 +541,6 @@ export class NvidiaProvider implements StructuredLlmProvider {
   }
 }
 
-export const nvidiaProvider: StructuredLlmProvider = new NvidiaProvider();
+export const nvidiaProvider: CapabilityAwareStructuredLlmProvider =
+  new NvidiaProvider();
 

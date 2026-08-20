@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import { performance } from "node:perf_hooks";
 
 import type {
-  StructuredLlmProvider,
+  CapabilityAwareStructuredLlmProvider,
+  StructuredLlmProviderCapabilities,
   StructuredLlmRequest,
   StructuredLlmResult,
 } from "./contracts.js";
@@ -102,7 +103,16 @@ function parseStructuredValue(envelope: ClaudeCliEnvelope): unknown {
   return JSON.parse(json) as unknown;
 }
 
-export class ClaudeCliProvider implements StructuredLlmProvider {
+const CLAUDE_CLI_CAPABILITIES = {
+  supportsOutputTokenLimit: false,
+  supportsTransportRetries: false,
+} as const satisfies StructuredLlmProviderCapabilities;
+
+export class ClaudeCliProvider
+  implements CapabilityAwareStructuredLlmProvider
+{
+  readonly capabilities = CLAUDE_CLI_CAPABILITIES;
+
   private readonly binary: string;
   private readonly runner: ClaudeCliRunner;
 
@@ -207,4 +217,5 @@ export class ClaudeCliProvider implements StructuredLlmProvider {
   }
 }
 
-export const claudeCliProvider: StructuredLlmProvider = new ClaudeCliProvider();
+export const claudeCliProvider: CapabilityAwareStructuredLlmProvider =
+  new ClaudeCliProvider();
