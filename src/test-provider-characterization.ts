@@ -80,6 +80,31 @@ try {
   const fenced = await callNvidiaJson("vendor/model", "prompt", (v) => v as { value: number }, { maxRetries: 0 });
   assert.deepEqual(fenced.data, { value: 42 });
 
+  queue({ body: success('Result follows:\n{"value":7}') });
+  const embedded = await callNvidiaJson(
+    "vendor/model",
+    "prompt",
+    (v) => v as { value: number },
+    { maxRetries: 0 },
+  );
+  assert.deepEqual(embedded.data, { value: 7 });
+
+  queue({
+    body: success(
+      'prefix {"outer":{"text":"brace } inside string"},"items":[1,2]} suffix',
+    ),
+  });
+  const balanced = await callNvidiaJson(
+    "vendor/model",
+    "prompt",
+    (v) => v as { outer: { text: string }; items: number[] },
+    { maxRetries: 0 },
+  );
+  assert.deepEqual(balanced.data, {
+    outer: { text: "brace } inside string" },
+    items: [1, 2],
+  });
+
   queue({ body: success("not-json") });
   await assert.rejects(
     () => callNvidiaJson("vendor/model", "prompt", (v) => v, { maxRetries: 0 }),

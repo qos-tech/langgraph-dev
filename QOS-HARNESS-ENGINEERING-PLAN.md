@@ -1,17 +1,17 @@
 # QOS Harness — Engineering Plan
 
-**Status:** Active  
-**Version:** 2.0  
-**Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-002 — Step 2: Define Provider Contract`
+**Status:** Active
+**Version:** 2.0
+**Current milestone:** `H-ARCH`
+**Current task:** `H-ARCH-002 — Step 3: Separate Shared Structured-Output Behavior`
 **Task status:** Approved — Step 1 in progress
 
 ---
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.1`  
-**Status:** Architecture Foundation Alpha  
+**Version:** `v0.1.0-alpha.1`
+**Status:** Architecture Foundation Alpha
 **Milestone:** `H-ARCH-001 — Graph Decomposition` ✅
 
 ### Architecture Milestone
@@ -1716,8 +1716,8 @@ Observed result:
 - `src/graph.ts` is now a small compatibility/public API boundary;
 - the full validation gate passed.
 
-**H-ARCH-001 conclusion:** structurally complete.  
-**Release baseline:** `v0.1.0-alpha.1`  
+**H-ARCH-001 conclusion:** structurally complete.
+**Release baseline:** `v0.1.0-alpha.1`
 **Next:** `H-ARCH-002 — LLM Provider Contract`
 
 ## 12.19 Step 7 Detailed Specification — Extract Graph Nodes and Remove Circular Dependency
@@ -2011,8 +2011,8 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 
 ## Status
 
-**Milestone:** In progress  
-**Current step:** Step 2 — Define Provider Contract  
+**Milestone:** In progress
+**Current step:** Step 3 — Separate Shared Structured-Output Behavior
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2181,6 +2181,138 @@ npm run test:tools
 Step 2 is complete when the contract compiles, a fake provider proves substitutability at the type level, production behavior remains unchanged, and all existing gates remain green.
 
 **Next:** Step 3 — separate genuinely shared structured-output behavior from adapter-specific behavior.
+
+
+
+## H-ARCH-002 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The provider-neutral structured generation contract is now established.
+
+Accepted boundary:
+
+```text
+StructuredLlmProvider
+  → StructuredLlmRequest<T>
+  → StructuredLlmResult<T>
+  → LlmUsage
+```
+
+The contract contains no NVIDIA, Claude, Ollama, HTTP, LangGraph, or Zod-specific concepts. A fake implementation proves the contract can be satisfied without infrastructure dependencies.
+
+The full Step 2 gate passed.
+
+
+## H-ARCH-002 Step 3 — Separate Shared Structured-Output Behavior
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Separate only the structured-output behavior that is demonstrably provider-neutral, while leaving transport, retry policy, model-family behavior, recovery behavior, timing, validation error context, and provider response mapping inside the NVIDIA adapter for now.
+
+### Evidence-based responsibility decision
+
+| Responsibility | Step 3 decision | Reason |
+| --- | --- | --- |
+| JSON object extraction | **Shared** | Pure transformation of model text; no NVIDIA dependency |
+| HTTP transport/auth | NVIDIA adapter | Provider-specific infrastructure |
+| Retry/backoff/Retry-After | NVIDIA adapter | Bound to HTTP/provider behavior |
+| Nemotron request body | NVIDIA adapter | Model/provider-specific |
+| GPT-OSS reasoning/recovery | NVIDIA adapter | Model-specific workaround |
+| Response content lookup | NVIDIA adapter | NVIDIA/OpenAI-compatible response shape |
+| Timing | NVIDIA adapter for now | Measures concrete provider execution |
+| Token usage mapping | NVIDIA adapter for now | NVIDIA currently returns snake_case |
+| Validation invocation | NVIDIA adapter for now | Current error context includes provider/model behavior |
+| Normalized provider errors | Deferred | Requires an explicit error contract, not yet defined |
+
+### Architectural decision
+
+Create:
+
+```text
+src/providers/structured-output.ts
+```
+
+with the pure helper:
+
+```ts
+extractJsonObject(content: string): string
+```
+
+`src/providers/nvidia.ts` will import this helper instead of owning its implementation.
+
+This is intentionally a small extraction. Step 3 does **not** create a generic structured-output executor, because current evidence does not yet justify moving validation, timing, or provider error context out of concrete adapters.
+
+### Files in this step
+
+Create:
+
+```text
+src/providers/structured-output.ts
+```
+
+Modify:
+
+```text
+src/providers/nvidia.ts
+src/test-provider-characterization.ts
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/graph/nodes.ts
+```
+
+### Behavioral invariants
+
+- NVIDIA request shape remains unchanged.
+- NVIDIA auth/base URL remain unchanged.
+- Retry/backoff remain unchanged.
+- Nemotron customization remains unchanged.
+- GPT-OSS recovery remains unchanged.
+- Validation behavior/error text remain unchanged.
+- Public `callNvidiaJson` signature remains unchanged.
+- Graph nodes remain coupled to NVIDIA until the later adapter/injection steps.
+
+### Acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] JSON extraction no longer lives in `nvidia.ts`.
+- [ ] the shared extraction helper imports no provider/HTTP/model dependencies.
+- [ ] pure JSON behavior remains unchanged.
+- [ ] fenced JSON behavior remains unchanged.
+- [ ] text-prefixed JSON behavior remains supported.
+- [ ] balanced embedded JSON with braces inside strings remains supported.
+- [ ] invalid JSON still produces the current NVIDIA wrapping behavior.
+- [ ] all previous gates remain green.
+- [ ] no graph-node or contract behavior changes.
+
+### Commit
+
+```bash
+git commit -m "refactor(provider): extract structured JSON parsing"
+```
+
+### Exit condition
+
+Step 3 is complete when JSON extraction is a provider-neutral utility and the NVIDIA characterization suite proves no observable provider behavior regressed.
+
+**Next:** Step 4 — convert NVIDIA into a `StructuredLlmProvider` adapter while preserving the characterized boundary.
 
 
 # Release Procedure — v0.1.0-alpha.1

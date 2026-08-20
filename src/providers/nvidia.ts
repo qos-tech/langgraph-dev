@@ -1,5 +1,7 @@
 import { performance } from "node:perf_hooks";
 
+import { extractJsonObject } from "./structured-output.js";
+
 /**
  * ============================================================
  * TYPES
@@ -157,136 +159,6 @@ function calculateBackoffMs(retryIndex: number): number {
   const jitter = Math.floor(Math.random() * 1_000);
 
   return base + jitter;
-}
-
-/**
- * ============================================================
- * JSON EXTRACTION
- * ============================================================
- */
-
-function extractJsonObject(content: string): string {
-  const trimmed = content.trim();
-
-  /**
-   * Caso ideal.
-   */
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    try {
-      JSON.parse(trimmed);
-
-      return trimmed;
-    } catch {
-      // continua
-    }
-  }
-
-  /**
-   * ```json
-   * {...}
-   * ```
-   */
-  const fencedMatches = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)];
-
-  for (const match of fencedMatches.reverse()) {
-    const candidate = match[1]?.trim();
-
-    if (!candidate) {
-      continue;
-    }
-
-    try {
-      JSON.parse(candidate);
-
-      return candidate;
-    } catch {
-      // continua
-    }
-  }
-
-  /**
-   * Alguns modelos podem devolver texto
-   * antes do JSON.
-   */
-  for (
-    let start = trimmed.lastIndexOf("{");
-    start >= 0;
-    start = trimmed.lastIndexOf("{", start - 1)
-  ) {
-    const candidate = trimmed.slice(start);
-
-    try {
-      JSON.parse(candidate);
-
-      return candidate;
-    } catch {
-      // continua
-    }
-  }
-
-  /**
-   * Fallback:
-   * procura objeto balanceado.
-   */
-  for (let start = 0; start < trimmed.length; start++) {
-    if (trimmed[start] !== "{") {
-      continue;
-    }
-
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let i = start; i < trimmed.length; i++) {
-      const char = trimmed[i];
-
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-
-          continue;
-        }
-
-        if (char === "\\") {
-          escaped = true;
-
-          continue;
-        }
-
-        if (char === '"') {
-          inString = false;
-        }
-
-        continue;
-      }
-
-      if (char === '"') {
-        inString = true;
-
-        continue;
-      }
-
-      if (char === "{") {
-        depth++;
-      } else if (char === "}") {
-        depth--;
-      }
-
-      if (depth === 0) {
-        const candidate = trimmed.slice(start, i + 1);
-
-        try {
-          JSON.parse(candidate);
-
-          return candidate;
-        } catch {
-          break;
-        }
-      }
-    }
-  }
-
-  throw new Error("Nenhum objeto JSON válido encontrado na resposta.");
 }
 
 /**
