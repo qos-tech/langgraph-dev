@@ -27,7 +27,9 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   );
 }) as typeof fetch;
 
-const { callNvidiaJson } = await import("./providers/nvidia.js");
+const { NvidiaProvider, callNvidiaJson } = await import(
+  "./providers/nvidia.js"
+);
 
 function queue(...items: MockReply[]) {
   replies = [...items];
@@ -144,6 +146,47 @@ try {
   assert.equal(calls.length, 2);
   assert.equal(requestBody(1).max_tokens, 2000);
   assert.equal(requestBody(1).reasoning_effort, "low");
+
+
+  // Step 4: the contract adapter must preserve structured behavior while
+  // normalizing token usage into the provider-neutral contract.
+  queue({
+    body: success('{"adapter":true}', {
+      prompt_tokens: 11,
+      completion_tokens: 6,
+      total_tokens: 17,
+    }),
+  });
+
+  const provider = new NvidiaProvider();
+
+  const adapterResult = await provider.generateStructured({
+    model: "vendor/model",
+    prompt: "adapter prompt",
+    validate: (v) => v as { adapter: boolean },
+    maxTokens: 777,
+    maxRetries: 0,
+  });
+
+  assert.deepEqual(adapterResult.data, {
+    adapter: true,
+  });
+
+  assert.deepEqual(adapterResult.usage, {
+    promptTokens: 11,
+    completionTokens: 6,
+    totalTokens: 17,
+  });
+
+  const adapterBody = requestBody();
+  assert.equal(adapterBody.model, "vendor/model");
+  assert.equal(adapterBody.max_tokens, 777);
+  assert.deepEqual(adapterBody.messages, [
+    {
+      role: "user",
+      content: "adapter prompt",
+    },
+  ]);
 
   console.log("✅ H-ARCH-002 Step 1 provider characterization tests passed.");
 } finally {

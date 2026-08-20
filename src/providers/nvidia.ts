@@ -1,5 +1,11 @@
 import { performance } from "node:perf_hooks";
 
+import type {
+  StructuredLlmProvider,
+  StructuredLlmRequest,
+  StructuredLlmResult,
+} from "./contracts.js";
+
 import { extractJsonObject } from "./structured-output.js";
 
 /**
@@ -460,3 +466,71 @@ export async function callNvidiaJson<T>(
       : {}),
   };
 }
+
+/**
+ * ============================================================
+ * PROVIDER ADAPTER
+ * ============================================================
+ */
+
+/**
+ * Provider-neutral adapter over the characterized NVIDIA implementation.
+ *
+ * `callNvidiaJson` remains exported as a compatibility API while graph nodes
+ * still depend on it. The adapter delegates to that characterized boundary and
+ * maps NVIDIA token-usage field names into the provider-neutral contract.
+ */
+export class NvidiaProvider implements StructuredLlmProvider {
+  async generateStructured<T>(
+    request: StructuredLlmRequest<T>,
+  ): Promise<StructuredLlmResult<T>> {
+    const options: NvidiaCallOptions = {
+      ...(request.maxTokens !== undefined
+        ? {
+            maxTokens: request.maxTokens,
+          }
+        : {}),
+      ...(request.maxRetries !== undefined
+        ? {
+            maxRetries: request.maxRetries,
+          }
+        : {}),
+    };
+
+    const result = await callNvidiaJson(
+      request.model,
+      request.prompt,
+      request.validate,
+      options,
+    );
+
+    return {
+      data: result.data,
+      elapsedSeconds: result.elapsedSeconds,
+      ...(result.usage
+        ? {
+            usage: {
+              ...(result.usage.prompt_tokens !== undefined
+                ? {
+                    promptTokens: result.usage.prompt_tokens,
+                  }
+                : {}),
+              ...(result.usage.completion_tokens !== undefined
+                ? {
+                    completionTokens: result.usage.completion_tokens,
+                  }
+                : {}),
+              ...(result.usage.total_tokens !== undefined
+                ? {
+                    totalTokens: result.usage.total_tokens,
+                  }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+}
+
+export const nvidiaProvider: StructuredLlmProvider = new NvidiaProvider();
+

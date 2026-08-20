@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 3: Separate Shared Structured-Output Behavior`
-**Task status:** Approved — Step 1 in progress
+**Current task:** `H-ARCH-002 — Step 4: Convert NVIDIA to Contract Adapter`
+**Task status:** In progress — Step 4
 
 ---
 
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 3 — Separate Shared Structured-Output Behavior
+**Current step:** Step 4 — Convert NVIDIA to Contract Adapter
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2206,7 +2206,7 @@ The full Step 2 gate passed.
 
 ## H-ARCH-002 Step 3 — Separate Shared Structured-Output Behavior
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2313,6 +2313,162 @@ git commit -m "refactor(provider): extract structured JSON parsing"
 Step 3 is complete when JSON extraction is a provider-neutral utility and the NVIDIA characterization suite proves no observable provider behavior regressed.
 
 **Next:** Step 4 — convert NVIDIA into a `StructuredLlmProvider` adapter while preserving the characterized boundary.
+
+
+
+## H-ARCH-002 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The provider-neutral JSON extraction helper now lives in:
+
+```text
+src/providers/structured-output.ts
+```
+
+`src/providers/nvidia.ts` consumes that helper while preserving NVIDIA transport, retry/backoff, model-family customization, GPT-OSS recovery, validation wrapping, timing, and legacy public API behavior.
+
+The full Step 3 gate passed.
+
+**Decision:** proceed to Step 4 and make NVIDIA formally satisfy `StructuredLlmProvider` without changing graph-node dependencies yet.
+
+
+## H-ARCH-002 Step 4 — Convert NVIDIA to Contract Adapter
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Make NVIDIA formally implement the provider-neutral `StructuredLlmProvider` contract while preserving the characterized `callNvidiaJson` API and all current NVIDIA behavior.
+
+### Architectural strategy
+
+Introduce:
+
+```ts
+export class NvidiaProvider implements StructuredLlmProvider
+```
+
+with:
+
+```ts
+generateStructured<T>(
+  request: StructuredLlmRequest<T>,
+): Promise<StructuredLlmResult<T>>
+```
+
+The adapter delegates to the already-characterized `callNvidiaJson` boundary.
+
+This is deliberate. Step 4 proves contract compatibility first; it does not simultaneously rewrite the transport implementation.
+
+### Compatibility boundary
+
+`callNvidiaJson` remains exported and unchanged so current graph nodes continue operating exactly as before.
+
+Conceptually:
+
+```text
+current graph nodes
+      ↓
+callNvidiaJson()          ← compatibility API
+      ↓
+NVIDIA implementation
+
+future consumers
+      ↓
+StructuredLlmProvider
+      ↑
+NvidiaProvider
+      ↓
+callNvidiaJson()
+```
+
+Later steps will invert the node dependency.
+
+### Usage normalization
+
+NVIDIA currently exposes token usage as:
+
+```text
+prompt_tokens
+completion_tokens
+total_tokens
+```
+
+The provider-neutral contract exposes:
+
+```text
+promptTokens
+completionTokens
+totalTokens
+```
+
+`NvidiaProvider` owns this mapping because it is adapter-specific response normalization.
+
+### Files in this step
+
+Modify:
+
+```text
+src/providers/nvidia.ts
+src/test-provider-characterization.ts
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/structured-output.ts
+src/graph/nodes.ts
+```
+
+### Behavioral invariants
+
+- `callNvidiaJson` signature remains unchanged.
+- NVIDIA request shape remains unchanged.
+- auth/base URL remain unchanged.
+- retry/backoff remain unchanged.
+- Nemotron customization remains unchanged.
+- GPT-OSS recovery remains unchanged.
+- validation/error behavior remains unchanged.
+- graph nodes remain unchanged.
+- no provider registry/factory is introduced.
+
+### Acceptance criteria
+
+- [ ] `NvidiaProvider` implements `StructuredLlmProvider`.
+- [ ] a provider-neutral `generateStructured()` call reaches the same characterized NVIDIA transport.
+- [ ] result data remains validated.
+- [ ] elapsed time is preserved.
+- [ ] token usage maps to camelCase provider-neutral fields.
+- [ ] legacy `callNvidiaJson` behavior remains green.
+- [ ] no graph-node changes.
+- [ ] no new runtime dependency.
+- [ ] all previous gates remain green.
+
+### Acceptance gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+```bash
+git commit -m "feat(provider): adapt NVIDIA to structured LLM contract"
+```
+
+### Exit condition
+
+Step 4 is complete when NVIDIA can be consumed through `StructuredLlmProvider` while the legacy boundary remains behaviorally unchanged.
+
+**Next:** Step 5 — introduce explicit provider resolution/composition for agent roles without yet spreading provider-specific branches through the graph.
 
 
 # Release Procedure — v0.1.0-alpha.1
