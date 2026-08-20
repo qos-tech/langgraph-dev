@@ -19,7 +19,8 @@
     "test:claude-provider": "tsx src/test-claude-provider.ts",
     "test:claude-smoke": "tsx src/test-claude-smoke.ts",
     "test:cross-provider": "tsx src/test-cross-provider-acceptance.ts",
-    "test:cross-provider-live": "node --env-file=.env --import tsx src/test-cross-provider-live.ts"
+    "test:cross-provider-live": "node --env-file=.env --import tsx src/test-cross-provider-live.ts",
+    "test:provider-architecture": "tsx src/test-provider-architecture.ts"
   },
   "keywords": [],
   "author": "",

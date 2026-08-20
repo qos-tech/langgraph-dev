@@ -476,9 +476,10 @@ export async function callNvidiaJson<T>(
 /**
  * Provider-neutral adapter over the characterized NVIDIA implementation.
  *
- * `callNvidiaJson` remains exported as a compatibility API while graph nodes
- * still depend on it. The adapter delegates to that characterized boundary and
- * maps NVIDIA token-usage field names into the provider-neutral contract.
+ * `callNvidiaJson` remains exported as a compatibility API for focused NVIDIA
+ * tests and legacy callers. Graph nodes consume this adapter through the
+ * provider-neutral contract. The adapter also maps NVIDIA token-usage field
+ * names into the provider-neutral contract.
  */
 export class NvidiaProvider implements StructuredLlmProvider {
   async generateStructured<T>(

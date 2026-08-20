@@ -15,6 +15,16 @@ export type StructuredLlmRequest<T> = {
   model: string;
   prompt: string;
   validate: (value: unknown) => T;
+
+  /**
+   * Optional execution hints.
+   *
+   * Providers may honor these when equivalent controls exist. They are not
+   * cross-provider guarantees: the current NVIDIA adapter supports them,
+   * while Claude Code CLI has no equivalent max-token/retry semantics.
+   *
+   * Capability-aware execution policy is deferred to H-ARCH-003.
+   */
   maxTokens?: number;
   maxRetries?: number;
 };

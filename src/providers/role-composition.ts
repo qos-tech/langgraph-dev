@@ -5,6 +5,11 @@ export type LlmRole = "planner" | "reviewer" | "refiner";
 export type LlmRoleBinding = Readonly<{
   provider: StructuredLlmProvider;
   model: string;
+
+  /**
+   * Role-level execution hints forwarded through StructuredLlmRequest.
+   * Concrete providers may support only a subset of these controls.
+   */
   maxTokens: number;
   maxRetries: number;
 }>;

@@ -117,10 +117,9 @@ export class ClaudeCliProvider implements StructuredLlmProvider {
     const startedAt = performance.now();
 
     /*
-     * Claude Code CLI does not expose provider-neutral equivalents for the
-     * current maxTokens/maxRetries request knobs. They remain accepted by the
-     * shared contract but are intentionally not translated into unrelated CLI
-     * flags such as --max-turns.
+     * Claude Code CLI does not expose equivalents for the optional
+     * maxTokens/maxRetries execution hints. They are intentionally not
+     * translated into unrelated CLI flags such as --max-turns.
      */
     void request.maxTokens;
     void request.maxRetries;

@@ -21,15 +21,13 @@ function reviewMaxTokens(model: string): number {
 }
 
 /**
- * Current runtime composition.
+ * Current default runtime composition.
  *
- * This module is the only Step-5 location that knows the concrete provider
- * used by the planner/reviewer/refiner roles. Graph nodes remain unchanged
- * until Step 6.
+ * Concrete provider/model selection belongs here rather than in graph nodes.
+ * The graph consumes only provider-neutral role bindings.
  *
- * The duplicated model/token settings intentionally mirror the current nodes
- * during this transitional step. Step 6 removes the node-local copies after
- * the composition has been characterized.
+ * maxTokens/maxRetries are role-level execution hints. NVIDIA currently
+ * honors them; providers without equivalent controls may ignore them.
  */
 export const defaultLlmRoleBindings: LlmRoleBindings =
   defineLlmRoleBindings({

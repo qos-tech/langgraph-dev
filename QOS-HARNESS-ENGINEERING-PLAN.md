@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 8: Cross-Provider Acceptance`
-**Task status:** In progress — Step 8
+**Current task:** `H-ARCH-002 — Step 9: Architecture Review / Release Decision`
+**Task status:** In progress — Step 9
 
 ---
 
@@ -377,7 +377,7 @@ No feature behavior changes during this milestone.
 
 - **H-ARCH-001 — Modularize Core Harness Without Behavior Changes**
 - H-ARCH-002 — Introduce LLM Provider Contract
-- H-ARCH-003 — Extract Graph Node Dependencies / Runtime Composition
+- H-ARCH-003 — Execution Policy / Runtime Composition Hardening
 - H-ARCH-004 — Establish Architectural Tests and Boundaries
 
 > `H-ARCH-002` and later tasks may be adjusted after H-ARCH-001 evidence is collected. We do not prematurely implement the entire target architecture.
@@ -2012,7 +2012,7 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 8 — Cross-Provider Acceptance
+**Current step:** Step 9 — Architecture Review / Release Decision
 **Release baseline:** `v0.1.0-alpha.1`
 
 ## Milestone outcome
@@ -2783,7 +2783,7 @@ editing graph nodes.
 
 ## H-ARCH-002 Step 8 — Cross-Provider Acceptance
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -2967,6 +2967,244 @@ all deterministic gates pass, and the live two-provider acceptance succeeds.
 **Next:** Step 9 — Architecture Review / Release Decision. Decide the
 execution-budget contract issue, verify dependency direction, and determine
 whether H-ARCH-002 is ready for the next alpha release.
+
+
+
+## H-ARCH-002 Step 8 Validation Record
+
+**Status:** ✅ Accepted
+
+Both concrete providers satisfied the same live structured-generation scenario:
+
+```text
+NVIDIA    — PASS
+Claude CLI — PASS
+```
+
+The deterministic cross-provider acceptance also proved that a mixed graph can
+be composed as:
+
+```text
+planner  → ClaudeCliProvider
+reviewer → NvidiaProvider
+refiner  → ClaudeCliProvider
+```
+
+without changing graph nodes.
+
+**Decision:** proceed to the final architecture review with provider
+substitutability proven by both mocked and live acceptance.
+
+
+## H-ARCH-002 Step 9 — Architecture Review / Release Decision
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Review the architecture produced by H-ARCH-002, make explicit decisions about
+the remaining contract limitation, add a deterministic dependency-direction
+guard, and decide whether the milestone is ready for the next alpha release.
+
+### Architecture findings
+
+#### 1. Provider substitution — accepted
+
+The milestone success criterion is satisfied.
+
+Graph nodes resolve provider-neutral role bindings and invoke:
+
+```text
+StructuredLlmProvider.generateStructured()
+```
+
+They contain no NVIDIA or Claude-specific branch.
+
+Both NVIDIA and Claude CLI satisfy the same core structured-generation
+scenario, and mixed provider role composition builds successfully.
+
+#### 2. Dependency direction — accepted
+
+Desired direction:
+
+```text
+graph nodes / builder
+        ↓
+role-composition
+        ↓
+StructuredLlmProvider contract
+        ↑
+concrete adapters
+
+outer composition root
+        ↓
+default-composition
+        ↓
+concrete provider selection
+```
+
+`src/graph.ts` is allowed to know the default composition because it is the
+current outer compatibility/runtime composition boundary.
+
+`src/graph/nodes.ts` and `src/graph/build-dev-graph.ts` must not import concrete
+provider adapters.
+
+Step 9 adds a deterministic architecture test to guard this rule.
+
+#### 3. maxTokens / maxRetries portability — accepted as alpha limitation
+
+Cross-provider evidence shows that these fields are not universal execution
+controls:
+
+```text
+NVIDIA:
+  maxTokens  → supported
+  maxRetries → supported
+
+Claude Code CLI:
+  maxTokens  → no equivalent control
+  maxRetries → no equivalent control
+```
+
+Mapping them to unrelated Claude flags such as `--max-turns` would be
+semantically incorrect.
+
+**Decision for H-ARCH-002:** do not redesign the runtime contract in the final
+acceptance step.
+
+For the current alpha contract, `maxTokens` and `maxRetries` are explicitly
+documented as optional execution hints rather than cross-provider guarantees.
+
+A capability-aware execution-policy redesign belongs to H-ARCH-003, where it
+can be evaluated independently instead of mixing a new policy model into the
+provider-contract acceptance commit.
+
+#### 4. H-ARCH-003 replan
+
+Step 6 of H-ARCH-002 already implemented the graph dependency injection that
+the original H-ARCH-003 preview expected.
+
+Therefore H-ARCH-003 is adjusted from:
+
+```text
+Extract Graph Node Dependencies / Runtime Composition
+```
+
+to:
+
+```text
+Execution Policy / Runtime Composition Hardening
+```
+
+Initial evidence-driven questions for H-ARCH-003:
+
+- should execution budgets be provider capabilities rather than request fields?
+- should role bindings carry portable policy, provider-specific policy, or both?
+- should adapters expose capability metadata?
+- how should timeout/retry/fallback policy be separated from model generation?
+- where should provider lifecycle/process startup policy live?
+
+This is a roadmap refinement based on completed architecture, not a change to
+the overall product objective.
+
+### Step 9 files
+
+Create:
+
+```text
+src/test-provider-architecture.ts
+```
+
+Modify:
+
+```text
+src/providers/contracts.ts
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify runtime graph behavior, prompts, schemas, routing, provider
+transport logic, or default provider selection.
+
+### Architecture test
+
+`test:provider-architecture` verifies that:
+
+- graph nodes do not import NVIDIA or Claude adapters;
+- graph builder does not import concrete adapters;
+- graph nodes invoke the neutral provider contract;
+- graph builder requires injected role bindings;
+- neutral contracts/composition do not import concrete adapters;
+- concrete default provider selection remains isolated in composition;
+- the outer `src/graph.ts` boundary may depend on default composition.
+
+### Final H-ARCH-002 gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+The Step 8 live cross-provider gate does not need to be repeated in every
+deterministic run because it already passed against both concrete providers.
+It remains an explicit release/smoke command:
+
+```bash
+npm run test:cross-provider-live
+```
+
+### Acceptance criteria
+
+- [ ] dependency-direction architecture test passes.
+- [ ] graph nodes contain no concrete provider dependency.
+- [ ] graph builder contains no concrete provider dependency.
+- [ ] NVIDIA and Claude adapters remain behind the same contract.
+- [ ] cross-provider deterministic acceptance remains green.
+- [ ] previous provider/graph/prompt/tool gates remain green.
+- [ ] maxTokens/maxRetries semantics are documented as optional hints.
+- [ ] no unsupported Claude mapping is introduced.
+- [ ] H-ARCH-003 is replanned around execution-policy hardening.
+- [ ] no runtime behavior change is mixed into the final review.
+- [ ] H-ARCH-002 is approved for the next alpha release if the full gate passes.
+
+### Release decision candidate
+
+If the full Step 9 gate passes:
+
+```text
+H-ARCH-002 — ACCEPT
+Next release candidate — v0.1.0-alpha.2
+Next architecture task — H-ARCH-003
+```
+
+Do not bump `package.json` in this review commit because the package lock was
+not part of the Step 9 source snapshot. Version/tag publication should be a
+separate release commit after H-ARCH-002 acceptance.
+
+### Commit
+
+```bash
+git commit -m "test(architecture): review provider boundaries"
+```
+
+### Exit condition
+
+Step 9 is complete when the architecture guard and all deterministic regression
+gates pass. At that point H-ARCH-002 can be marked complete and the
+`v0.1.0-alpha.2` release can be prepared.
 
 
 # Release Procedure — v0.1.0-alpha.1
