@@ -3,20 +3,20 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-002 — Step 9: Architecture Review / Release Decision`
-**Task status:** In progress — Step 9
+**Current task:** `Release v0.1.0-alpha.2`
+**Task status:** Ready for release
 
 ---
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.1`
-**Status:** Architecture Foundation Alpha
-**Milestone:** `H-ARCH-001 — Graph Decomposition` ✅
+**Version:** `v0.1.0-alpha.2`
+**Status:** Provider Abstraction Alpha
+**Milestone:** `H-ARCH-002 — LLM Provider Contract` ✅
 
 ### Architecture Milestone
 
-`H-ARCH-001` is complete.
+`H-ARCH-001` and `H-ARCH-002` are complete.
 
 The original graph monolith has been decomposed into explicit architectural boundaries:
 
@@ -56,13 +56,13 @@ npm run test:tools
 
 ### Release significance
 
-`v0.1.0-alpha.1` represents the first reproducible architectural baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
+`v0.1.0-alpha.2` represents the provider-abstraction architecture baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
 
-The baseline enables the next phases: LLM Provider Contract, Composition Root, benchmark/telemetry, Repository Intelligence, Context Engine, Evidence Protocol, Planning/Review, Implementation, Validation/Fix Loop, and Production Hardening.
+The release proves provider-neutral graph execution with NVIDIA and Claude CLI behind the same structured LLM contract, including mixed-provider composition and deterministic architecture boundaries.
 
 ### Next architecture task
 
-`H-ARCH-002 — LLM Provider Contract`
+`H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
 
 
 # 1. Product Objective
@@ -2011,9 +2011,9 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 
 ## Status
 
-**Milestone:** In progress
-**Current step:** Step 9 — Architecture Review / Release Decision
-**Release baseline:** `v0.1.0-alpha.1`
+**Milestone:** ✅ Complete
+**Current step:** Accepted
+**Release candidate:** `v0.1.0-alpha.2`
 
 ## Milestone outcome
 
@@ -2998,7 +2998,7 @@ substitutability proven by both mocked and live acceptance.
 
 ## H-ARCH-002 Step 9 — Architecture Review / Release Decision
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -3168,24 +3168,24 @@ npm run test:cross-provider-live
 
 ### Acceptance criteria
 
-- [ ] dependency-direction architecture test passes.
-- [ ] graph nodes contain no concrete provider dependency.
-- [ ] graph builder contains no concrete provider dependency.
-- [ ] NVIDIA and Claude adapters remain behind the same contract.
-- [ ] cross-provider deterministic acceptance remains green.
-- [ ] previous provider/graph/prompt/tool gates remain green.
-- [ ] maxTokens/maxRetries semantics are documented as optional hints.
-- [ ] no unsupported Claude mapping is introduced.
-- [ ] H-ARCH-003 is replanned around execution-policy hardening.
-- [ ] no runtime behavior change is mixed into the final review.
-- [ ] H-ARCH-002 is approved for the next alpha release if the full gate passes.
+- [x] dependency-direction architecture test passes.
+- [x] graph nodes contain no concrete provider dependency.
+- [x] graph builder contains no concrete provider dependency.
+- [x] NVIDIA and Claude adapters remain behind the same contract.
+- [x] cross-provider deterministic acceptance remains green.
+- [x] previous provider/graph/prompt/tool gates remain green.
+- [x] maxTokens/maxRetries semantics are documented as optional hints.
+- [x] no unsupported Claude mapping is introduced.
+- [x] H-ARCH-003 is replanned around execution-policy hardening.
+- [x] no runtime behavior change is mixed into the final review.
+- [x] H-ARCH-002 is approved for the next alpha release if the full gate passes.
 
-### Release decision candidate
+### Release decision
 
-If the full Step 9 gate passes:
+The full Step 9 gate passed:
 
 ```text
-H-ARCH-002 — ACCEPT
+H-ARCH-002 — ACCEPTED
 Next release candidate — v0.1.0-alpha.2
 Next architecture task — H-ARCH-003
 ```
@@ -3207,52 +3207,90 @@ gates pass. At that point H-ARCH-002 can be marked complete and the
 `v0.1.0-alpha.2` release can be prepared.
 
 
-# Release Procedure — v0.1.0-alpha.1
 
-Run the release gate:
+## H-ARCH-002 Step 9 Validation Record
+
+**Status:** ✅ Accepted
+
+The final architecture gate passed.
+
+Verified outcomes:
+
+- graph nodes remain provider-neutral;
+- graph builder requires injected role bindings;
+- concrete provider selection remains outside graph nodes;
+- NVIDIA and Claude CLI satisfy the same structured LLM contract;
+- deterministic cross-provider acceptance passes;
+- live NVIDIA/Claude cross-provider acceptance passes;
+- provider architecture boundary test passes;
+- `maxTokens` and `maxRetries` are explicitly treated as optional execution hints.
+
+**H-ARCH-002 conclusion:** complete.
+
+**Release decision:** `v0.1.0-alpha.2 — Provider Abstraction Alpha`
+
+**Next:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
+
+# Release Procedure — v0.1.0-alpha.2
+
+Run the full release gate:
 
 ```bash
 npm run typecheck && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
 npm run test:prompt-characterization && \
 npm run test:graph-characterization && \
 npm run test:tools
 ```
 
+Run the live provider smoke:
+
+```bash
+npm run test:cross-provider-live
+```
+
 Update package metadata:
 
 ```bash
-npm version 0.1.0-alpha.1 --no-git-tag-version
+npm version 0.1.0-alpha.2 --no-git-tag-version
 git diff -- package.json package-lock.json
 ```
 
 Stage and review:
 
 ```bash
-git add package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN-v2.md
+git add package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
 git diff --cached --stat
 git diff --cached
+git diff --check
 ```
 
 Create the release commit:
 
 ```bash
-git commit -m "chore(release): prepare v0.1.0-alpha.1"
+git commit -m "chore(release): prepare v0.1.0-alpha.2"
 ```
 
 Create and verify the annotated tag:
 
 ```bash
-git tag -a v0.1.0-alpha.1 \
-  -m "QOS Harness v0.1.0-alpha.1 - architecture foundation"
+git tag -a v0.1.0-alpha.2 \
+  -m "QOS Harness v0.1.0-alpha.2 - provider abstraction"
 
-git show v0.1.0-alpha.1 --stat
+git show v0.1.0-alpha.2 --stat
 ```
 
 Publish:
 
 ```bash
 git push origin main
-git push origin v0.1.0-alpha.1
+git push origin v0.1.0-alpha.2
 ```
 
 Final verification:
@@ -3262,5 +3300,6 @@ git status
 git tag --list "v0.1.0*"
 ```
 
-After publication, development continues with `H-ARCH-002 — LLM Provider Contract`.
+After publication, development continues with:
 
+`H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
