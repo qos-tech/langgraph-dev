@@ -1,0 +1,28 @@
+{
+  "name": "langgraph",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test:tools": "tsx src/test-tools.ts",
+    "test:structured": "tsx src/test-structured.ts",
+    "test:nvidia": "node --env-file=.env --import tsx src/test-nvidia-planner.ts",
+    "test:nvidia-review": "node --env-file=.env --import tsx src/test-nvidia-review.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@langchain/langgraph": "^1.4.10",
+    "@langchain/ollama": "^1.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2"
+  }
+}
