@@ -3,7 +3,7 @@
 **Status:** Active  
 **Version:** 2.0  
 **Current milestone:** `H-ARCH`  
-**Current task:** `H-ARCH-002 — LLM Provider Contract`
+**Current task:** `H-ARCH-002 — Step 1: Characterize Current Provider Boundary`
 **Task status:** Approved — Step 1 in progress
 
 ---
@@ -2004,6 +2004,109 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 - [ ] Run `npm run test:graph-characterization`.
 - [ ] Confirm baseline tests before Step 2.
 - [ ] Step 2 — Extract graph schemas.
+
+
+
+# H-ARCH-002 — LLM Provider Contract
+
+## Status
+
+**Milestone:** In progress  
+**Current step:** Step 1 — Characterize Current Provider Boundary  
+**Release baseline:** `v0.1.0-alpha.1`
+
+## Milestone outcome
+
+At completion, graph/application logic will depend on a provider-neutral structured LLM contract rather than `callNvidiaJson` directly. NVIDIA will be an adapter behind that contract, provider-specific errors and model-family behavior will remain inside adapters, and a second provider will prove substitutability without graph-node changes.
+
+## Planned steps
+
+1. **Characterize Current Provider Boundary** — deterministic tests, no production refactor.
+2. **Define Provider Contract** — smallest provider-neutral structured-generation contract supported by evidence.
+3. **Separate Shared Structured-Output Behavior** — normalize only genuinely provider-neutral concerns.
+4. **Convert NVIDIA to Contract Adapter** — preserve characterization while implementing the contract.
+5. **Provider Resolution / Composition** — configure role → provider without provider-specific graph branches.
+6. **Inject Providers into Graph Nodes** — remove direct NVIDIA dependency from nodes.
+7. **Add Second Provider Adapter** — initially Claude CLI or local/Ollama.
+8. **Cross-Provider Acceptance** — same acceptance scenarios across implementations.
+9. **Architecture Review / Release Decision** — verify dependency direction and decide next alpha.
+
+## Step 1 — Current Provider Characterization
+
+# H-ARCH-002 — Step 1: Characterize Current NVIDIA Provider Boundary
+
+## Objective
+
+Freeze the externally observable behavior of the current NVIDIA integration before introducing a provider abstraction.
+
+## Evidence from current code
+
+`src/providers/nvidia.ts` currently owns HTTP transport, authentication, model-family request customization, retry/backoff, JSON extraction, GPT-OSS empty-content recovery, validation wrapping, timing, and usage propagation.
+
+`src/graph/nodes.ts` directly imports `callNvidiaJson`, so graph execution is still coupled to the NVIDIA adapter.
+
+The existing NVIDIA planner/reviewer files are live benchmarks rather than deterministic characterization tests.
+
+## Scope
+
+Add one deterministic provider characterization test using a mocked global `fetch`. No production code changes.
+
+## Characterized behaviors
+
+- NVIDIA endpoint and bearer authentication
+- base chat-completions request shape
+- caller-provided model and token budget
+- Nemotron `thinking: false`
+- GPT-OSS `reasoning_effort: low`
+- structured JSON extraction
+- invalid JSON error normalization
+- validator error wrapping
+- non-retryable HTTP failure
+- retry-limit behavior for HTTP 429
+- GPT-OSS empty-content recovery and increased recovery token budget
+
+## Non-goals
+
+- no `LlmProvider` interface yet
+- no provider factory/registry
+- no node injection
+- no NVIDIA production refactor
+- no Claude/Ollama adapter
+- no retry-policy redesign
+
+## Acceptance
+
+```bash
+npm run typecheck
+npm run test:provider-characterization
+```
+
+The test must make zero real NVIDIA requests and require no real API key.
+
+## Exit condition
+
+Once this characterization passes, Step 2 may define the provider contract against observed behavior instead of assumptions.
+
+
+### Current validation state
+
+The runtime characterization test already passes. The first `typecheck` exposed two test-only strict-TypeScript issues under `exactOptionalPropertyTypes`; a correction was prepared. Step 1 is not accepted until the corrected test passes the full gate:
+
+```bash
+npm run typecheck && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+## H-ARCH-002 success criterion
+
+Provider substitution must not require graph-node edits. The same orchestration contract must be able to execute with different configured providers/models. If planner/reviewer nodes need NVIDIA-, Claude-, or Ollama-specific branches, this milestone has not achieved its architectural objective.
+
+## Non-goals
+
+H-ARCH-002 does not yet implement benchmark-driven model selection, telemetry dashboards, Repository Intelligence, Context Engine, implementation/fix agents, or specialist Product/UX/UI agents.
 
 
 # Release Procedure — v0.1.0-alpha.1
