@@ -2,9 +2,9 @@
 
 **Status:** Active
 **Version:** 2.0
-**Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-004 — Step 3: Protect Composition and Public Boundaries`
-**Task status:** ✅ Accepted — Step 3
+**Current milestone:** `H0`
+**Current task:** `H0-001 — Run Telemetry Foundation`
+**Task status:** Ready to spec
 
 ---
 
@@ -5141,8 +5141,8 @@ After publication, development continues with:
 
 ## Status
 
-**Milestone:** 🚧 In progress
-**Current step:** Accepted — Step 3
+**Milestone:** ✅ Complete
+**Current step:** Accepted
 **Release baseline:** `v0.1.0-alpha.3`
 
 ## Milestone objective
@@ -5903,4 +5903,263 @@ Accepted outcome:
 - the complete alpha.3 deterministic regression gate remained green.
 
 **Decision:** proceed to Step 4 — Final Architecture Acceptance.
+
+## H-ARCH-004 Step 4 — Final Architecture Acceptance
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Close H-ARCH-004 and the complete H-ARCH architectural-foundation milestone by
+proving that the repository now has deterministic protection for the
+architecture established across H-ARCH-001, H-ARCH-002 and H-ARCH-003.
+
+This is acceptance/review only.
+
+No production source changes are planned.
+
+### Final architecture under acceptance
+
+```text
+index.ts
+  ↓
+graph.ts
+  ├── default runtime composition
+  └── compatibility/public exports
+       ↓
+graph/build-dev-graph.ts
+  ↓
+graph/nodes.ts
+  ↓
+runtime-composition
+  ↓
+execution
+  ↓
+provider contract
+  ↑
+concrete adapters
+
+repository inspection/tools
+  ↑
+graph nodes
+```
+
+Concrete provider selection remains outside the graph core.
+
+### H-ARCH-004 guard stack
+
+#### Step 1 — Dependency characterization
+
+Protects the exact current core dependency shape.
+
+Purpose:
+
+- freeze evidence before generalization;
+- make architectural drift visible.
+
+#### Step 2 — Dependency graph / cycle guards
+
+Protects generalized structural invariants:
+
+- no production cycles;
+- graph internals do not import `graph.ts`;
+- graph internals remain provider-neutral;
+- provider runtime core remains neutral;
+- graph builder remains injectable.
+
+#### Step 3 — Public/composition boundary guards
+
+Protects outer architecture semantics:
+
+- `index.ts` enters through `graph.ts`;
+- `graph.ts` remains the compatibility/default-composition boundary;
+- default composition owns concrete provider selection;
+- current compatibility exports remain stable during H-ARCH;
+- runtime core does not depend outward on graph/public composition.
+
+#### Existing provider architecture guard
+
+`test:provider-architecture` remains complementary.
+
+It continues protecting the provider-specific dependency rules established in
+H-ARCH-002/003.
+
+### Final acceptance test
+
+Create:
+
+```text
+src/test-harch004-acceptance.ts
+```
+
+The test does not create a fourth architecture framework.
+
+It verifies that:
+
+- Step 1 characterization exists and covers the intended core modules;
+- Step 2 provides generalized cycle/dependency protection;
+- Step 3 protects the public/composition boundary;
+- the existing provider architecture guard remains present;
+- the final runtime dependency direction still matches the accepted design;
+- H-ARCH-004 did not introduce an external architecture dependency.
+
+### H-ARCH completion decision
+
+If Step 4 passes, H-ARCH is complete:
+
+```text
+H-ARCH-001 ✅ Modular graph foundation
+H-ARCH-002 ✅ Provider abstraction
+H-ARCH-003 ✅ Runtime/execution policy hardening
+H-ARCH-004 ✅ Architectural tests and boundaries
+```
+
+At that point architectural-foundation work stops unless later evidence reveals
+a concrete defect.
+
+The next milestone is:
+
+```text
+H0 — Benchmark Foundation
+```
+
+This transition is deliberate.
+
+The Harness now needs measurement and product capability more than additional
+architecture-only refactoring.
+
+### Files
+
+Create:
+
+```text
+src/test-harch004-acceptance.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Non-goals
+
+Do not:
+
+- add more architectural layers;
+- reorganize folders;
+- introduce domain/application/infrastructure directories now;
+- remove compatibility APIs;
+- remove provider compatibility aliases;
+- add a provider registry;
+- change graph behavior;
+- change provider behavior;
+- add telemetry implementation in this step;
+- start H0 before H-ARCH-004 acceptance;
+- add Repository Intelligence or Context Engine.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] final H-ARCH-004 acceptance test exists.
+- [x] Step 1 characterization guard is present and validated.
+- [x] Step 2 dependency/cycle guard is present and validated.
+- [x] Step 3 public/composition guard is present and validated.
+- [x] provider architecture guard remains complementary and green.
+- [x] final runtime dependency direction remains intact.
+- [x] production dependency graph remains acyclic.
+- [x] graph core remains provider-neutral.
+- [x] provider runtime core remains graph/provider-adapter neutral.
+- [x] default composition remains the concrete provider-selection root.
+- [x] public compatibility boundary remains stable.
+- [x] no production source changes.
+- [x] no new dependency is added.
+- [x] full alpha.3/H-ARCH regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "test(architecture): close architectural foundation"
+```
+
+### Exit condition
+
+Step 4 is accepted when the full deterministic gate passes.
+
+Then:
+
+```text
+H-ARCH-004 — COMPLETE
+H-ARCH — COMPLETE
+Next: H0-001 — Run Telemetry Foundation
+```
+
+
+## H-ARCH-004 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic final architecture gate passed in the development
+environment.
+
+Verified outcomes:
+
+- Step 1 dependency characterization remains present and green;
+- Step 2 generalized module dependency/cycle guards remain green;
+- Step 3 public/composition boundary guards remain green;
+- the existing provider architecture guard remains complementary and green;
+- the production dependency graph remains acyclic;
+- `graph.ts` remains the outer compatibility/default-composition boundary;
+- graph builder and graph nodes remain injectable and provider-neutral;
+- runtime composition and execution remain free of concrete provider selection;
+- `default-composition.ts` remains the concrete provider-selection root;
+- no production source changed during H-ARCH-004;
+- no architecture dependency/library was added;
+- the complete alpha.3/H-ARCH deterministic regression gate remained green.
+
+### H-ARCH final conclusion
+
+```text
+H-ARCH-001 ✅ Modularize Core Harness Without Behavior Changes
+H-ARCH-002 ✅ LLM Provider Contract
+H-ARCH-003 ✅ Execution Policy / Runtime Composition Hardening
+H-ARCH-004 ✅ Architectural Tests and Boundaries
+
+H-ARCH ✅ COMPLETE
+```
+
+The architectural foundation is now considered sufficient for the next phase.
+Further architecture-only refactoring is deferred unless later benchmark or
+product evidence exposes a concrete defect.
+
+**Decision:** proceed to `H0-001 — Run Telemetry Foundation`.
 
