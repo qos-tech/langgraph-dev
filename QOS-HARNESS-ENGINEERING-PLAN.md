@@ -10,9 +10,9 @@
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.6`
-**Status:** Benchmark Suite Alpha
-**Milestone:** `H0-002 — Benchmark Task Suite` ✅
+**Version:** `v0.1.0-alpha.7`
+**Status:** Task Intake Foundation Alpha
+**Milestone:** `H0-002A — Task Intake Foundation` ✅
 
 ### Architecture Milestone
 
@@ -56,9 +56,9 @@ npm run test:tools
 
 ### Release significance
 
-`v0.1.0-alpha.6` represents the completed fixed benchmark-suite foundation of the QOS Harness. It is not yet a production-ready autonomous development system.
+`v0.1.0-alpha.7` represents the completed Task Intake Foundation of the QOS Harness. It is not yet a production-ready autonomous development system.
 
-The release proves that benchmark tasks are versioned, fixed, machine-independent, deterministically validated, and evaluated through explicit acceptance semantics before the automatic benchmark runner is introduced.
+The release proves that external/manual work can enter through one deterministic normalized task contract, that repository identity remains machine-independent from concrete execution workspaces, and that one-run Harness execution now crosses a reusable application boundary before the Benchmark Runner is introduced.
 
 ### Next milestone
 
@@ -5587,6 +5587,91 @@ acceptance
 release decision based on actual scope
    ↓
 H0-003 Benchmark Runner
+```
+
+# Release Procedure — v0.1.0-alpha.7
+
+`H0-002A — Task Intake Foundation` is accepted.
+
+Release name:
+
+```text
+v0.1.0-alpha.7 — Task Intake Foundation Alpha
+```
+
+Release scope:
+
+```text
+versioned NormalizedHarnessTask
+deterministic task normalization
+explicit repository identity
+ResolvedWorkspace separation
+runHarness application boundary
+manual/executable intake adapter
+H0-001/H-ARCH boundary migration
+H0-002A final acceptance
+```
+
+Run the final deterministic release gate:
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002a-manual-intake && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+After the full gate is green:
+
+```bash
+git add package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
+git diff --cached --check
+git diff --cached
+git commit -m "chore(release): v0.1.0-alpha.7"
+git tag -a v0.1.0-alpha.7 -m "v0.1.0-alpha.7 — Task Intake Foundation Alpha"
+git push
+git push origin v0.1.0-alpha.7
+```
+
+Next engineering task:
+
+```text
+H0-003 — Benchmark Runner
 ```
 
 # Release Procedure — v0.1.0-alpha.6

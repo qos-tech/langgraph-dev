@@ -1,5 +1,89 @@
 # Changelog
 
+## [0.1.0-alpha.7] - 2026-08-21
+
+### Added
+
+- Versioned integration-neutral `NormalizedHarnessTask` contract
+- Deterministic task normalizer with stable validation issue codes
+- Explicit `ResolvedWorkspace` execution boundary separate from task identity
+- Reusable `runHarness(...)` application execution boundary
+- Manual/executable intake adapter
+- Final H0-002A task-intake architecture acceptance test
+
+### Changed
+
+- `src/index.ts` now delegates raw manual intake to `createManualHarnessRunRequest(...)`
+- `src/index.ts` now delegates one-run execution to `runHarness(...)`
+- One-run graph, lifecycle and telemetry orchestration moved behind the application boundary
+- Repository identity is explicit and machine-independent through `TARGET_REPOSITORY_ID`
+- Optional repository revision is carried independently through `TARGET_REPOSITORY_REVISION`
+- H0-001 and H-ARCH characterization tests now protect the new application-boundary dependency direction
+- H0-002A — Task Intake Foundation is complete
+
+### Architecture
+
+```text
+manual/executable producer
+        ↓
+Manual Intake Adapter
+        ↓
+Deterministic Task Normalizer
+        ↓
+NormalizedHarnessTask
+        +
+ResolvedWorkspace
+        +
+optional execution policy
+        ↓
+runHarness(...)
+        ↓
+public graph boundary
+        ↓
+Harness Core
+```
+
+Task identity and execution location are deliberately separate:
+
+```text
+NormalizedHarnessTask.repository
+  → id
+  → revision?
+
+ResolvedWorkspace
+  → repositoryPath
+```
+
+The Harness core remains independent from CLI, GitHub, Q-Flow, HTTP/API, benchmark-runner and provider-specific task formats.
+
+### Validation
+
+- TypeScript typecheck
+- H0-002A final architecture acceptance
+- Manual intake adapter tests
+- Application run-boundary tests
+- Deterministic task normalizer tests
+- Normalized task contract tests
+- Task-entry characterization
+- H0-002 benchmark-suite regression
+- H0-001 telemetry regression
+- H-ARCH-004 architecture acceptance/public/dependency/boundary guards
+- H-ARCH-003 runtime/provider lifecycle regression
+- Provider architecture and cross-provider regression
+- Prompt and graph characterization
+- Repository tools tests
+
+### Milestone
+
+```text
+H0-002A ✅ Task Intake Foundation
+```
+
+### Next
+
+- `H0-003 — Benchmark Runner`
+- Resolve benchmark repository/revision identities into isolated reproducible worktrees and execute every benchmark through the shared `runHarness(...)` application boundary
+
 ## [0.1.0-alpha.6] - 2026-08-21
 
 ### Added
