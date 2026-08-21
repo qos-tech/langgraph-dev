@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Step 1: Characterize Run Lifecycle and Telemetry Inputs`
-**Task status:** ✅ Accepted — Step 1
+**Current task:** `H0-001 — Step 2: Define Run Telemetry Contract`
+**Task status:** ✅ Accepted — Step 2
 
 ---
 
@@ -6177,7 +6177,7 @@ product evidence exposes a concrete defect.
 ## H0-001 — Run Telemetry Foundation
 
 **Status:** 🚧 In progress
-**Current step:** Accepted — Step 1
+**Current step:** Accepted — Step 2
 **Release baseline:** `v0.1.0-alpha.4`
 
 ## Milestone objective
@@ -6444,4 +6444,365 @@ Telemetry should remain outside `DevState` unless a later step produces concrete
 evidence that graph state itself must carry a telemetry concern.
 
 **Decision:** proceed to Step 2 — Define Run Telemetry Contract.
+
+## H0-001 Step 2 — Define Run Telemetry Contract
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Define the smallest stable internal telemetry contract justified by the Step 1
+run-lifecycle evidence.
+
+Step 2 introduces telemetry types only.
+
+It does not record, persist, time, or mutate a run yet.
+
+### Design decisions
+
+#### 1. Telemetry remains outside `DevState`
+
+The graph state already represents orchestration state.
+
+Run telemetry is a cross-cutting observation of that execution and therefore
+starts in a dedicated module:
+
+```text
+src/telemetry/contracts.ts
+```
+
+No `DevState` field is added in Step 2.
+
+#### 2. Persisted records are versioned from day one
+
+The contract contains:
+
+```ts
+schemaVersion: 1
+```
+
+The `.runs/<run-id>.json` persistence planned for Step 4 will therefore have an
+explicit compatibility discriminator.
+
+Step 2 does not implement JSON parsing/migrations.
+
+#### 3. Run status is terminal-only
+
+Telemetry records use:
+
+```text
+completed
+failed
+```
+
+rather than duplicating every transient `DevState.status`.
+
+Intermediate node/status timing is not yet evidenced as necessary for the
+minimal run record.
+
+#### 4. Lifecycle identity/timing is explicit
+
+The contract includes:
+
+```text
+runId
+startedAt
+finishedAt
+durationMs
+task
+repositoryPath
+```
+
+Timestamps are ISO-8601 strings.
+
+`durationMs` is stored explicitly so benchmark/report consumers do not need to
+recompute it from wall-clock strings.
+
+No clock implementation is added in this step.
+
+#### 5. Existing execution counters become grouped run metrics
+
+Step 1 identified:
+
+```text
+planningAttempts
+reviewAttempts
+attempts
+```
+
+The telemetry contract exposes them as:
+
+```ts
+attempts: {
+  planning
+  review
+  task
+}
+```
+
+This avoids leaking graph-state field names into the persisted telemetry shape
+while preserving their semantics.
+
+#### 6. File activity stays deliberately small
+
+Current evidence supports:
+
+```text
+number of files read
+files changed
+```
+
+The contract therefore contains:
+
+```ts
+files: {
+  read: number
+  changed: readonly string[]
+}
+```
+
+Requested evidence, duplicate requests, invalid paths, and context-token detail
+remain deferred until H1/H2/H3 provide deterministic evidence for those
+metrics.
+
+#### 7. LLM-call telemetry is part of the contract now, instrumentation later
+
+The provider contract already exposes:
+
+```text
+model
+elapsedSeconds
+usage.promptTokens?
+usage.completionTokens?
+usage.totalTokens?
+```
+
+and runtime composition already has explicit roles:
+
+```text
+planner
+reviewer
+refiner
+```
+
+The run telemetry contract therefore defines:
+
+```ts
+LlmCallTelemetry
+```
+
+with those portable fields.
+
+Step 5 will capture/populate these records.
+
+No provider-specific fields are allowed.
+
+#### 8. Start/completion fragments are explicit
+
+Step 3 will build a lifecycle recorder.
+
+To prevent that implementation from inventing an ad-hoc partial shape, Step 2
+defines:
+
+```text
+RunTelemetryStart
+RunTelemetryCompletion
+RunTelemetry
+```
+
+The final record is the composition of lifecycle start + completion data plus
+the schema version.
+
+### Contract
+
+```text
+RunTelemetry
+├── schemaVersion
+├── runId
+├── startedAt
+├── finishedAt
+├── durationMs
+├── task
+├── repositoryPath
+├── finalStatus
+├── failureReason?
+├── attempts
+│   ├── planning
+│   ├── review
+│   └── task
+├── files
+│   ├── read
+│   └── changed[]
+└── llmCalls[]
+    ├── role
+    ├── model
+    ├── elapsedSeconds
+    ├── promptTokens?
+    ├── completionTokens?
+    └── totalTokens?
+```
+
+### Files
+
+Create:
+
+```text
+src/telemetry/contracts.ts
+src/test-run-telemetry-contract.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/state.ts
+src/index.ts
+src/graph/*
+src/providers/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- generate a run ID;
+- call a clock;
+- create a lifecycle recorder;
+- mutate telemetry during graph execution;
+- add telemetry to `DevState`;
+- create `.runs/`;
+- write/read JSON;
+- add runtime JSON validation/migrations;
+- instrument provider calls;
+- calculate cost;
+- add node timings;
+- add evidence-request metrics;
+- add OpenTelemetry;
+- add a database/dashboard.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-run-telemetry-contract.ts
+```
+
+It must prove:
+
+- schema version is explicit;
+- a complete successful run record satisfies the contract;
+- a failed run can carry `failureReason`;
+- attempt counters have distinct planning/review/task semantics;
+- file read/change metrics are represented;
+- LLM role/model/timing/optional usage is provider-neutral;
+- token usage is optional because the existing provider result allows optional
+  usage;
+- the contract compiles without depending on graph state or concrete providers.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/telemetry/contracts.ts` exists.
+- [x] telemetry schema version is explicit.
+- [x] run identity fields are explicit.
+- [x] start/finish timestamps and duration are explicit.
+- [x] terminal final status is limited to completed/failed.
+- [x] failure reason is optional and supported.
+- [x] planning/review/task attempt metrics are distinct.
+- [x] file-read count and changed-file list are represented.
+- [x] LLM call telemetry uses role/model/elapsed time and optional portable usage.
+- [x] telemetry imports no concrete provider.
+- [x] telemetry does not depend on `DevState`.
+- [x] no runtime recorder/persistence behavior is introduced.
+- [x] no new dependency is added.
+- [x] Step 1 characterization remains green.
+- [x] complete H-ARCH/alpha.4 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "feat(telemetry): define run telemetry contract"
+```
+
+### Exit condition
+
+Step 2 is complete when the telemetry contract is explicit, provider-neutral,
+independent from graph state, and the full deterministic regression gate
+passes.
+
+**Next:** Step 3 — Create Run Lifecycle Recorder.
+
+
+## H0-001 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic H0-001 Step 2 gate passed on the
+`v0.1.0-alpha.4` architectural-foundation baseline.
+
+Accepted contract:
+
+- `src/telemetry/contracts.ts` owns the telemetry types;
+- telemetry remains independent from `DevState`;
+- `schemaVersion` is explicit from the first persisted contract;
+- run identity contains `runId`, `task`, and `repositoryPath`;
+- lifecycle timing contains `startedAt`, `finishedAt`, and `durationMs`;
+- terminal run status is limited to `completed | failed`;
+- `failureReason` remains optional;
+- planning, review, and task attempts are represented independently;
+- file activity captures files-read count and changed-file paths;
+- LLM-call telemetry captures role, model, elapsed time, and optional portable
+  token usage;
+- the contract contains no concrete provider dependency;
+- no recorder, clock, persistence, graph-state mutation, or provider
+  instrumentation was introduced;
+- no new dependency was added;
+- Step 1 characterization remained green;
+- the complete H-ARCH/alpha.4 deterministic regression gate remained green.
+
+### Design consequence
+
+Step 3 may create the run lifecycle recorder against this contract without
+adding telemetry fields to graph state.
+
+The recorder should own lifecycle assembly and time/run-ID dependencies through
+small injectable boundaries so deterministic tests do not depend on wall clock
+or random IDs.
+
+**Decision:** proceed to Step 3 — Create Run Lifecycle Recorder.
 
