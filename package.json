@@ -39,7 +39,8 @@
     "test:llm-call-telemetry": "tsx src/test-llm-call-telemetry.ts",
     "test:run-telemetry-integration": "tsx src/test-run-telemetry-integration.ts",
     "test:benchmark-contract": "tsx src/test-benchmark-contract.ts",
-    "test:benchmark-cases": "tsx src/test-benchmark-cases.ts"
+    "test:benchmark-cases": "tsx src/test-benchmark-cases.ts",
+    "test:benchmark-acceptance": "tsx src/test-benchmark-acceptance.ts"
   },
   "keywords": [],
   "author": "",

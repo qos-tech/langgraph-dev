@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002 — Benchmark Task Suite`
-**Task status:** ✅ H0-002 Step 2 accepted
+**Task status:** ✅ H0-002 Step 3 accepted
 
 ---
 
@@ -8182,7 +8182,7 @@ H0-002 — Benchmark Task Suite.
 ## Status
 
 **Task:** 🚧 In progress
-**Current step:** Accepted — Step 2
+**Current step:** Accepted — Step 3
 **Planned steps:** 5
 
 ## Objective
@@ -8894,3 +8894,357 @@ Accepted decisions:
 - no new runtime dependency was added.
 
 **Decision:** proceed to H0-002 Step 3 — Define Expected Outcomes / Acceptance Rules.
+
+## H0-002 Step 3 — Define Expected Outcomes / Acceptance Rules
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Define the first deterministic acceptance semantics that turn a benchmark
+definition plus observed run outcome into an objective PASS/FAIL decision.
+
+Step 3 does not execute benchmarks.
+
+It defines how future H0-003 runner output will be judged.
+
+### Acceptance observation contract
+
+Create:
+
+```text
+src/benchmarks/acceptance.ts
+```
+
+with a minimal runtime-observation shape:
+
+```text
+finalOutcome
+filesChanged[]
+validationPassed
+humanInterventionRequired
+```
+
+These are deliberately outcome-level observations.
+
+Step 3 does not add telemetry aggregation, command execution, Git diff capture,
+or repository resolution.
+
+### Deterministic acceptance rules
+
+A benchmark is accepted only when all applicable conditions hold.
+
+#### Rule 1 — Expected final outcome must match
+
+```text
+observation.finalOutcome === benchmark.expectedOutcome
+```
+
+Mismatch:
+
+```text
+unexpected_outcome
+```
+
+Examples:
+
+```text
+B01 expected changes_required, observed blocked
+  → FAIL
+
+B02 expected already_satisfied, observed already_satisfied
+  → potentially PASS
+```
+
+#### Rule 2 — Already-satisfied benchmarks must not modify files
+
+For:
+
+```text
+expectedOutcome = already_satisfied
+```
+
+any changed file is a failure:
+
+```text
+unexpected_changes
+```
+
+This makes B02 explicitly detect unnecessary implementation work.
+
+Step 3 does not yet enforce allowed-file scopes for `changes_required` cases.
+That belongs to later benchmark/runner evidence because the current
+`BenchmarkTask` contract has no explicit allowed-path policy.
+
+#### Rule 3 — Deterministic validation must pass
+
+If the runner reports:
+
+```text
+validationPassed = false
+```
+
+the benchmark fails with:
+
+```text
+validation_failed
+```
+
+Step 3 consumes this boolean outcome only.
+
+H0-003 owns execution of `validationCommands`.
+
+#### Rule 4 — Human intervention means the benchmark did not autonomously complete
+
+If:
+
+```text
+humanInterventionRequired = true
+```
+
+the benchmark fails with:
+
+```text
+human_intervention_required
+```
+
+This is required by the project SFCR definition: a successful feature
+completion requires no human intervention.
+
+#### Rule 5 — Preserve all failure reasons
+
+Acceptance is not short-circuited.
+
+If multiple independent conditions fail, all applicable deterministic reasons
+are returned in a stable order:
+
+```text
+unexpected_outcome
+unexpected_changes
+validation_failed
+human_intervention_required
+```
+
+This gives H0-004 comparison/reporting richer evidence than a single boolean.
+
+### Blocked semantics
+
+A benchmark whose declared expected outcome is:
+
+```text
+blocked
+```
+
+may PASS when the observed outcome is `blocked`, validation is green, and no
+human intervention was required.
+
+This is intentional.
+
+For B05, correct architectural restraint is part of the benchmark objective.
+
+A benchmark system that treated every `blocked` outcome as an automatic failure
+would bias agents toward unsupported changes.
+
+### Why `successCriteria[]` are not automatically evaluated in Step 3
+
+The benchmark contract already carries human-reviewable `successCriteria[]`.
+
+However, Step 3 does not invent a generic deterministic interpreter for natural
+language criteria such as:
+
+```text
+"draft edges remain consistent after insertion or removal"
+```
+
+Those criteria need concrete evidence from fixture tests, command results,
+repository diff policy, or later benchmark-specific validators.
+
+For now:
+
+```text
+successCriteria[]
+  → benchmark intent / reviewable specification
+
+validationPassed
+  → deterministic executable evidence
+```
+
+Step 4 will validate suite structure and consistency.
+
+H0-003 will own actual execution evidence.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/acceptance.ts
+src/test-benchmark-acceptance.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/state.ts
+src/index.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- execute benchmark tasks;
+- execute validation commands;
+- resolve benchmark repositories;
+- inspect Git diffs;
+- enforce allowed changed paths for change-required tasks;
+- parse natural-language success criteria;
+- calculate SFCR;
+- calculate cost per successful completion;
+- aggregate run telemetry;
+- compare models;
+- generate reports;
+- change Harness runtime behavior.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-benchmark-acceptance.ts
+```
+
+The test proves:
+
+- matching `changes_required` outcome can pass;
+- matching `already_satisfied` with zero file changes can pass;
+- matching `blocked` can pass;
+- already-satisfied plus file changes fails;
+- expected-outcome mismatch fails;
+- deterministic validation failure fails;
+- required human intervention fails;
+- multiple failures are all preserved in deterministic order.
+
+No LLM, network, repository checkout, Git operation or validation command is
+executed.
+
+### Step 3 gate
+
+```bash
+npm run typecheck && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/acceptance.ts` exists.
+- [x] acceptance consumes benchmark definition plus observed run outcome.
+- [x] expected outcome mismatch deterministically fails.
+- [x] already-satisfied cases deterministically reject file changes.
+- [x] deterministic validation failure rejects the benchmark.
+- [x] required human intervention rejects the benchmark.
+- [x] a matching blocked outcome can pass.
+- [x] multiple failure reasons are preserved.
+- [x] failure reason ordering is deterministic.
+- [x] no natural-language success-criteria interpreter is invented.
+- [x] no allowed-path policy is invented before the benchmark contract contains one.
+- [x] no runner/repository/command execution behavior is introduced.
+- [x] no graph/provider/telemetry runtime behavior changes.
+- [x] no new runtime dependency is added.
+- [x] benchmark acceptance deterministic test passes.
+- [x] Step 1 and Step 2 benchmark tests remain green.
+- [x] alpha.5 regression gate remains green.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): define acceptance rules"
+```
+
+### Exit condition
+
+Step 3 is complete when benchmark PASS/FAIL semantics are deterministic for
+outcome matching, already-satisfied change safety, validation status, and human
+intervention, with all regression gates green.
+
+**Next:** Step 4 — Add Deterministic Benchmark Suite Validation.
+
+## H0-002 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The benchmark acceptance rules and complete deterministic alpha.5 regression
+gate passed in the development environment.
+
+Accepted deterministic semantics:
+
+```text
+unexpected_outcome
+unexpected_changes
+validation_failed
+human_intervention_required
+```
+
+Accepted decisions:
+
+- observed final outcome must match the benchmark's declared expected outcome;
+- `already_satisfied` benchmarks fail if any repository file changed;
+- deterministic validation failure rejects the benchmark;
+- required human intervention rejects autonomous benchmark success;
+- matching `blocked` outcomes may pass when `blocked` is the benchmark's expected
+  outcome;
+- multiple independent failure reasons are preserved in deterministic order;
+- natural-language `successCriteria[]` remain benchmark intent rather than being
+  falsely interpreted as generic executable assertions;
+- allowed-path enforcement for change-required tasks remains deferred until the
+  benchmark/runner contracts contain concrete scope evidence;
+- no repository resolution, command execution, Git diff capture, telemetry
+  aggregation, SFCR calculation, model comparison or report generation was
+  introduced;
+- no graph, provider, telemetry, state or executable runtime behavior changed;
+- no new runtime dependency was added.
+
+**Decision:** proceed to H0-002 Step 4 — Add Deterministic Benchmark Suite Validation.
