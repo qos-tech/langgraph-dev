@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002 — Benchmark Task Suite`
-**Task status:** ✅ H0-001 accepted
+**Task status:** ✅ H0-002 Step 1 accepted
 
 ---
 
@@ -8177,3 +8177,316 @@ All six H0-001 steps are accepted.
 **Decision:** close H0-001 — Run Telemetry Foundation and proceed to
 H0-002 — Benchmark Task Suite.
 
+# H0-002 — Benchmark Task Suite
+
+## Status
+
+**Task:** 🚧 In progress
+**Current step:** Accepted — Step 1
+**Planned steps:** 5
+
+## Objective
+
+Define a fixed, versioned and reproducible benchmark suite before building the
+automatic runner.
+
+H0-002 owns the benchmark definitions. It does not execute benchmarks or
+aggregate comparison reports.
+
+The five planned steps are:
+
+```text
+1. Define Benchmark Contract
+2. Define Benchmark Cases B01–B05
+3. Define Expected Outcomes / Acceptance Rules
+4. Add Deterministic Benchmark Suite Validation
+5. H0-002 Acceptance / Review
+```
+
+## H0-002 Step 1 — Define Benchmark Contract
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Define the smallest provider-neutral and runner-neutral contract required to
+describe one benchmark task reproducibly.
+
+No benchmark case is added in Step 1.
+
+### Architectural decision
+
+Create:
+
+```text
+src/benchmarks/contracts.ts
+```
+
+with a versioned `BenchmarkTask` contract.
+
+The contract contains:
+
+```text
+schemaVersion
+id
+title
+difficulty
+task
+repository
+constraints
+successCriteria
+validationCommands
+expectedOutcome
+```
+
+### Difficulty vocabulary
+
+The initial fixed suite already establishes five meaningful task classes:
+
+```text
+trivial
+already-satisfied
+localized
+cross-file
+architectural
+```
+
+The contract uses those semantic categories rather than a numeric score whose
+meaning would be arbitrary before benchmark evidence exists.
+
+### Expected outcome vocabulary
+
+The planning contract already exposes three final semantic outcomes:
+
+```text
+changes_required
+already_satisfied
+blocked
+```
+
+Benchmark tasks may declare which one is expected.
+
+Step 1 only records that expectation. Step 3 defines the deterministic
+acceptance semantics around it.
+
+### Repository reference
+
+A benchmark must identify a reproducible repository baseline with:
+
+```text
+repository.id
+repository.revision
+```
+
+The contract deliberately does not contain a local absolute path.
+
+Why:
+
+- `/Users/...` paths are machine-specific;
+- H0-002 defines benchmark identity, not checkout mechanics;
+- H0-003 will resolve repository IDs/revisions into isolated working copies.
+
+`revision` is an opaque stable revision identifier at this boundary. H0-003 may
+interpret it as a Git commit/tag or fixture revision according to repository
+resolution policy.
+
+### Validation commands
+
+`validationCommands` are data, not execution behavior.
+
+H0-002 records the deterministic commands associated with a benchmark.
+
+H0-003 owns actually executing them.
+
+### Contract helper
+
+Expose:
+
+```ts
+defineBenchmarkTask(...)
+```
+
+as an identity/type boundary.
+
+It must not:
+
+- mutate definitions;
+- normalize paths;
+- execute commands;
+- resolve repositories;
+- call an LLM;
+- add defaults.
+
+This keeps suite definitions literal and reviewable.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/contracts.ts
+src/test-benchmark-contract.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/state.ts
+src/index.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- define B01–B05 objects;
+- create fixture repositories;
+- clone/checkout repositories;
+- execute benchmark tasks;
+- run validation commands;
+- calculate SFCR;
+- calculate cost;
+- compare models;
+- aggregate telemetry;
+- define benchmark reports;
+- change Harness prompts, graph behavior or model strategy.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-benchmark-contract.ts
+```
+
+The test proves:
+
+- schema version is explicit;
+- all required task fields are representable;
+- repository identity/revision are explicit;
+- deterministic validation commands are data;
+- expected outcome is explicit;
+- `defineBenchmarkTask` preserves the supplied definition without hidden
+  normalization.
+
+No provider, repository checkout, filesystem fixture or network access is
+required.
+
+### Step 1 gate
+
+```bash
+npm run typecheck && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/contracts.ts` exists.
+- [x] benchmark schema version is explicit.
+- [x] benchmark difficulty has the five planned semantic categories.
+- [x] expected outcome uses the current final planning outcome vocabulary.
+- [x] repository identity is independent of machine-local absolute paths.
+- [x] repository revision is mandatory.
+- [x] constraints are explicit task data.
+- [x] success criteria are explicit task data.
+- [x] validation commands are explicit task data.
+- [x] `defineBenchmarkTask` is free of execution/normalization behavior.
+- [x] no benchmark case is prematurely added.
+- [x] no runner/repository checkout behavior is added.
+- [x] no provider/graph/telemetry behavior changes.
+- [x] no new runtime dependency is added.
+- [x] deterministic benchmark contract test passes.
+- [x] alpha.5 regression gate remains green.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): define benchmark task contract"
+```
+
+### Exit condition
+
+Step 1 is complete when benchmark definitions have one explicit, versioned,
+machine-independent contract and the full alpha.5 regression gate passes.
+
+**Next:** Step 2 — Define Benchmark Cases B01–B05.
+
+## H0-002 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The benchmark contract and the complete alpha.5 regression gate passed in the
+development environment.
+
+Accepted contract:
+
+```text
+BenchmarkTask
+  → schemaVersion
+  → id
+  → title
+  → difficulty
+  → task
+  → repository.id
+  → repository.revision
+  → constraints[]
+  → successCriteria[]
+  → validationCommands[]
+  → expectedOutcome
+```
+
+Accepted decisions:
+
+- benchmark definitions are versioned;
+- benchmark identity is independent of machine-local absolute paths;
+- every benchmark requires an explicit repository revision;
+- validation commands remain declarative data in H0-002;
+- expected outcomes use the existing planning outcome vocabulary;
+- semantic difficulty categories match the planned B01–B05 suite;
+- `defineBenchmarkTask(...)` is an identity/type boundary with no hidden
+  execution or normalization behavior;
+- no benchmark cases, runner, checkout behavior, model comparison, or report
+  behavior were introduced in Step 1;
+- no graph, provider, telemetry, state, or executable behavior changed;
+- no new runtime dependency was added.
+
+**Decision:** proceed to H0-002 Step 2 — Define Benchmark Cases B01–B05.
