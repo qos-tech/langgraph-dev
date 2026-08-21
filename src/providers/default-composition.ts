@@ -1,9 +1,9 @@
 import { nvidiaProvider } from "./nvidia.js";
 
 import {
-  defineLlmRoleBindings,
-  type LlmRoleBindings,
-} from "./role-composition.js";
+  defineLlmRuntimeConfig,
+  type LlmRuntimeConfig,
+} from "./runtime-composition.js";
 
 const DEFAULT_PLANNER_MODEL =
   "nvidia/nemotron-3.5-lightning-30b-a3b";
@@ -29,8 +29,8 @@ function reviewMaxOutputTokens(model: string): number {
  * Provider execution hints preserve the current NVIDIA output-token and
  * transport-retry behavior. They are not portable Harness execution policy.
  */
-export const defaultLlmRoleBindings: LlmRoleBindings =
-  defineLlmRoleBindings({
+export const defaultLlmRuntimeConfig: LlmRuntimeConfig =
+  defineLlmRuntimeConfig({
     planner: {
       provider: nvidiaProvider,
       model: plannerModel,
@@ -58,3 +58,5 @@ export const defaultLlmRoleBindings: LlmRoleBindings =
       },
     },
   });
+
+export const defaultLlmRoleBindings = defaultLlmRuntimeConfig;

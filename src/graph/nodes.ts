@@ -1,7 +1,7 @@
 import type { DevStateType } from "../state.js";
 
-import type { LlmRoleBindings } from "../providers/role-composition.js";
-import { resolveLlmRole } from "../providers/role-composition.js";
+import type { LlmRuntimeConfig } from "../providers/runtime-composition.js";
+import { resolveLlmRoleRuntime } from "../providers/runtime-composition.js";
 
 import { inspectRepository } from "../repository/inspect.js";
 
@@ -61,11 +61,11 @@ export const analyzeNode = async (
  * ============================================================
  */
 
-function createPlanNode(llmRoleBindings: LlmRoleBindings) {
+function createPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
-    const binding = resolveLlmRole(llmRoleBindings, "planner");
+    const binding = resolveLlmRoleRuntime(llmRuntimeConfig, "planner");
 
     console.log(`\n🧠 PLAN — ${binding.model}`);
 
@@ -107,11 +107,11 @@ function createPlanNode(llmRoleBindings: LlmRoleBindings) {
  * ============================================================
  */
 
-function createReviewPlanNode(llmRoleBindings: LlmRoleBindings) {
+function createReviewPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
-    const binding = resolveLlmRole(llmRoleBindings, "reviewer");
+    const binding = resolveLlmRoleRuntime(llmRuntimeConfig, "reviewer");
 
     console.log(`\n🔍 REVIEW PLAN — ${binding.model}`);
 
@@ -240,11 +240,11 @@ export const readContextNode = async (
  * ============================================================
  */
 
-function createRefineNode(llmRoleBindings: LlmRoleBindings) {
+function createRefineNode(llmRuntimeConfig: LlmRuntimeConfig) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
-    const binding = resolveLlmRole(llmRoleBindings, "refiner");
+    const binding = resolveLlmRoleRuntime(llmRuntimeConfig, "refiner");
 
     console.log(`\n🎯 REFINE — ${binding.model}`);
 
@@ -470,13 +470,13 @@ export const failedNode = async (
  * ============================================================
  */
 
-export function createGraphNodes(llmRoleBindings: LlmRoleBindings) {
+export function createGraphNodes(llmRuntimeConfig: LlmRuntimeConfig) {
   return {
     analyzeNode,
-    planNode: createPlanNode(llmRoleBindings),
-    reviewPlanNode: createReviewPlanNode(llmRoleBindings),
+    planNode: createPlanNode(llmRuntimeConfig),
+    reviewPlanNode: createReviewPlanNode(llmRuntimeConfig),
     readContextNode,
-    refineNode: createRefineNode(llmRoleBindings),
+    refineNode: createRefineNode(llmRuntimeConfig),
     planGateNode,
     reportNode,
     failedNode,

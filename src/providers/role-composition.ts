@@ -1,41 +1,32 @@
 import type {
-  StructuredLlmProvider,
-  StructuredLlmProviderHints,
-} from "./contracts.js";
+  LlmRole,
+  LlmRoleRuntimeConfig,
+  LlmRuntimeConfig,
+} from "./runtime-composition.js";
 
-export type LlmRole = "planner" | "reviewer" | "refiner";
-
-export type LlmRoleBinding = Readonly<{
-  provider: StructuredLlmProvider;
-  model: string;
-
-  /**
-   * Provider-specific execution hints for this role.
-   *
-   * These values are semantically distinct from future portable Harness
-   * execution policy. Providers may honor only the hints covered by their
-   * advertised capabilities.
-   */
-  providerHints?: StructuredLlmProviderHints;
-}>;
-
-export type LlmRoleBindings = Readonly<Record<LlmRole, LlmRoleBinding>>;
+import {
+  defineLlmRuntimeConfig,
+  resolveLlmRoleRuntime,
+} from "./runtime-composition.js";
 
 /**
- * Defines the provider/model execution binding for each current LLM role.
- *
- * The graph must consume role bindings rather than branch on concrete provider
- * names. Concrete provider selection belongs in composition.
+ * Compatibility aliases retained while H-ARCH-003 migrates callers from the
+ * old "binding" terminology to explicit runtime configuration.
  */
+export type LlmRoleBinding = LlmRoleRuntimeConfig;
+export type LlmRoleBindings = LlmRuntimeConfig;
+
+export type { LlmRole };
+
 export function defineLlmRoleBindings(
   bindings: LlmRoleBindings,
 ): LlmRoleBindings {
-  return bindings;
+  return defineLlmRuntimeConfig(bindings);
 }
 
 export function resolveLlmRole(
   bindings: LlmRoleBindings,
   role: LlmRole,
 ): LlmRoleBinding {
-  return bindings[role];
+  return resolveLlmRoleRuntime(bindings, role);
 }

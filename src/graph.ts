@@ -1,4 +1,4 @@
-import { defaultLlmRoleBindings } from "./providers/default-composition.js";
+import { defaultLlmRuntimeConfig } from "./providers/default-composition.js";
 
 import { buildDevGraph as buildInjectedDevGraph } from "./graph/build-dev-graph.js";
 
@@ -28,7 +28,7 @@ export {
 export { createGraphNodes } from "./graph/nodes.js";
 export { buildDevGraph as buildInjectedDevGraph } from "./graph/build-dev-graph.js";
 
-const defaultGraphNodes = createGraphNodes(defaultLlmRoleBindings);
+const defaultGraphNodes = createGraphNodes(defaultLlmRuntimeConfig);
 
 export const {
   analyzeNode,
@@ -42,7 +42,7 @@ export const {
 } = defaultGraphNodes;
 
 export function buildDevGraph() {
-  return buildInjectedDevGraph(defaultLlmRoleBindings);
+  return buildInjectedDevGraph(defaultLlmRuntimeConfig);
 }
 
 export const devGraph = buildDevGraph();

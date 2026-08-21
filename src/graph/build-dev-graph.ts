@@ -2,7 +2,7 @@ import { StateGraph, START, END } from "@langchain/langgraph";
 
 import { DevState } from "../state.js";
 
-import type { LlmRoleBindings } from "../providers/role-composition.js";
+import type { LlmRuntimeConfig } from "../providers/runtime-composition.js";
 
 import { createGraphNodes } from "./nodes.js";
 
@@ -13,7 +13,7 @@ import {
   reviewRouter,
 } from "./routers.js";
 
-export function buildDevGraph(llmRoleBindings: LlmRoleBindings) {
+export function buildDevGraph(llmRuntimeConfig: LlmRuntimeConfig) {
   const {
     analyzeNode,
     failedNode,
@@ -23,7 +23,7 @@ export function buildDevGraph(llmRoleBindings: LlmRoleBindings) {
     refineNode,
     reportNode,
     reviewPlanNode,
-  } = createGraphNodes(llmRoleBindings);
+  } = createGraphNodes(llmRuntimeConfig);
 
   return new StateGraph(DevState)
     .addNode("analyze", analyzeNode)

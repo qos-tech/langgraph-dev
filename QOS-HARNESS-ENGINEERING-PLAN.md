@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Step 3: Separate Portable Policy from Provider Hints`
-**Task status:** In progress — Step 3
+**Current task:** `H-ARCH-003 — Step 4: Introduce Runtime Role Configuration`
+**Task status:** In progress — Step 4
 
 ---
 
@@ -3237,7 +3237,7 @@ Verified outcomes:
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 3 — Separate Portable Policy from Provider Hints
+**Current step:** Step 4 — Introduce Runtime Role Configuration
 **Release baseline:** `v0.1.0-alpha.2`
 
 ## Milestone objective
@@ -3663,7 +3663,7 @@ future portable Harness policy.
 
 ## H-ARCH-003 Step 3 — Separate Portable Policy from Provider Hints
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -3897,6 +3897,268 @@ separated from the core structured-generation request semantics while existing
 runtime behavior remains stable.
 
 **Next:** Step 4 — Introduce Runtime Role Configuration.
+
+
+
+## H-ARCH-003 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The provider-hint migration and full deterministic regression gate passed.
+
+Accepted outcome:
+
+```text
+StructuredLlmRequest
+  → model
+  → prompt
+  → validate
+  → providerHints?
+
+providerHints
+  → maxOutputTokens
+  → transportRetries
+```
+
+The old ambiguous `maxTokens` / `maxRetries` request fields are no longer part
+of the provider-neutral request shape.
+
+**Decision:** Step 4 may now promote capability awareness into the runtime
+role-composition boundary.
+
+---
+
+## H-ARCH-003 Step 4 — Introduce Runtime Role Configuration
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Make the runtime role configuration an explicit capability-aware boundary
+between outer composition and graph execution.
+
+The graph should receive effective runtime configuration rather than raw role
+bindings whose provider hints may be unsupported.
+
+### Architectural decision
+
+Introduce:
+
+```text
+src/providers/runtime-composition.ts
+```
+
+with:
+
+```ts
+LlmRoleRuntimeConfig
+LlmRuntimeConfig
+ResolvedLlmRoleRuntime
+defineLlmRuntimeConfig(...)
+resolveLlmRoleRuntime(...)
+```
+
+### Runtime responsibility
+
+Runtime composition owns:
+
+```text
+role
+  → provider
+  → model
+  → requested provider hints
+  → provider capabilities
+  → effective provider hints
+```
+
+Graph nodes consume only the resolved result.
+
+### Capability-aware hint resolution
+
+Example:
+
+```text
+requested:
+  maxOutputTokens = 1800
+  transportRetries = 6
+
+provider capabilities:
+  supportsOutputTokenLimit = false
+  supportsTransportRetries = false
+
+resolved:
+  providerHints = omitted
+```
+
+This prevents the graph from forwarding controls that the configured provider
+cannot honor.
+
+### Why this belongs here
+
+The provider adapter should not decide orchestration configuration.
+
+The graph should not branch on provider capabilities.
+
+Therefore capability-to-hint resolution belongs between:
+
+```text
+default/user runtime composition
+          ↓
+runtime role resolver
+          ↓
+graph nodes
+```
+
+### Compatibility
+
+`src/providers/role-composition.ts` remains temporarily as a compatibility
+boundary.
+
+Its existing types/functions delegate to the new runtime-composition module.
+
+This avoids unnecessary external breakage while the internal graph migrates to
+the new terminology.
+
+### Default runtime
+
+`src/providers/default-composition.ts` exports:
+
+```text
+defaultLlmRuntimeConfig
+```
+
+and temporarily keeps:
+
+```text
+defaultLlmRoleBindings
+```
+
+as a compatibility alias.
+
+The current default NVIDIA models and provider hints remain unchanged.
+
+### Graph changes
+
+`src/graph/nodes.ts` and `src/graph/build-dev-graph.ts` depend directly on
+`LlmRuntimeConfig` / `resolveLlmRoleRuntime`.
+
+No concrete provider import is introduced.
+
+### Files
+
+Create:
+
+```text
+src/providers/runtime-composition.ts
+src/test-runtime-composition.ts
+```
+
+Modify:
+
+```text
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/graph/nodes.ts
+src/graph/build-dev-graph.ts
+src/graph.ts
+src/test-provider-hints.ts
+src/test-provider-composition.ts
+src/test-provider-injection.ts
+src/test-cross-provider-acceptance.ts
+src/test-provider-architecture.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- add Harness timeout policy;
+- add Harness call retries;
+- move NVIDIA transport retries;
+- add fallback;
+- redesign provider lifecycle;
+- optimize Claude CLI startup;
+- change provider request/response behavior;
+- change model defaults;
+- change graph topology;
+- change prompts or routing semantics.
+
+
+### Step 4 typecheck correction
+
+The first Step 4 gate exposed a test-only typing mismatch in:
+
+```text
+src/test-provider-composition.ts
+src/test-provider-injection.ts
+```
+
+Both fake-provider helpers were still declared to return the base
+`StructuredLlmProvider` type even though Step 4 added the required capability
+metadata and runtime configuration now requires
+`CapabilityAwareStructuredLlmProvider`.
+
+The correction changes only the fake-provider return types/imports. No
+production runtime behavior is changed.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] runtime-composition module exists.
+- [ ] runtime role provider is capability-aware.
+- [ ] unsupported provider hints are removed before graph execution.
+- [ ] graph nodes do not inspect provider capabilities.
+- [ ] graph nodes do not import concrete providers.
+- [ ] builder accepts `LlmRuntimeConfig`.
+- [ ] default NVIDIA runtime values remain unchanged.
+- [ ] old role-composition API remains temporarily compatible.
+- [ ] no provider adapter behavior changes.
+- [ ] no graph topology/prompt/routing behavior changes.
+- [ ] runtime-composition deterministic test passes.
+- [ ] all previous alpha.2 gates remain green.
+
+### Commit
+
+```bash
+git commit -m "refactor(runtime): introduce capability-aware role config"
+```
+
+### Exit condition
+
+Step 4 is complete when runtime role configuration is explicit,
+capability-aware, and isolated from both graph nodes and concrete provider
+adapters.
+
+**Next:** Step 5 — Centralize Timeout / Retry Ownership.
 
 
 # Release Procedure — v0.1.0-alpha.2

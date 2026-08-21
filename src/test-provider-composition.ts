@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type {
-  StructuredLlmProvider,
+  CapabilityAwareStructuredLlmProvider,
   StructuredLlmRequest,
   StructuredLlmResult,
 } from "./providers/contracts.js";
@@ -11,8 +11,12 @@ import {
   resolveLlmRole,
 } from "./providers/role-composition.js";
 
-function fakeProvider(id: string): StructuredLlmProvider {
+function fakeProvider(id: string): CapabilityAwareStructuredLlmProvider {
   return {
+    capabilities: {
+      supportsOutputTokenLimit: true,
+      supportsTransportRetries: true,
+    },
     async generateStructured<T>(
       request: StructuredLlmRequest<T>,
     ): Promise<StructuredLlmResult<T>> {

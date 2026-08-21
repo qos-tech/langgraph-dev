@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 import type {
-  StructuredLlmProvider,
+  CapabilityAwareStructuredLlmProvider,
   StructuredLlmRequest,
   StructuredLlmResult,
 } from "./providers/contracts.js";
@@ -10,8 +10,12 @@ import type {
 import { defineLlmRoleBindings } from "./providers/role-composition.js";
 import { buildDevGraph } from "./graph/build-dev-graph.js";
 
-function fakeProvider(id: string): StructuredLlmProvider {
+function fakeProvider(id: string): CapabilityAwareStructuredLlmProvider {
   return {
+    capabilities: {
+      supportsOutputTokenLimit: true,
+      supportsTransportRetries: true,
+    },
     async generateStructured<T>(
       request: StructuredLlmRequest<T>,
     ): Promise<StructuredLlmResult<T>> {

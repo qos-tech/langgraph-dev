@@ -11,6 +11,7 @@ const [
   compatibilityBoundary,
   contracts,
   roleComposition,
+  runtimeComposition,
   defaultComposition,
 ] = await Promise.all([
   source("./graph/nodes.ts"),
@@ -18,6 +19,7 @@ const [
   source("./graph.ts"),
   source("./providers/contracts.ts"),
   source("./providers/role-composition.ts"),
+  source("./providers/runtime-composition.ts"),
   source("./providers/default-composition.ts"),
 ]);
 
@@ -40,11 +42,11 @@ for (const [name, content] of [
 }
 
 // The graph builder must require injected role bindings.
-assert.match(builder, /buildDevGraph\(llmRoleBindings: LlmRoleBindings\)/);
-assert.match(builder, /createGraphNodes\(llmRoleBindings\)/);
+assert.match(builder, /buildDevGraph\(llmRuntimeConfig: LlmRuntimeConfig\)/);
+assert.match(builder, /createGraphNodes\(llmRuntimeConfig\)/);
 
 // Nodes may depend only on the neutral role-composition boundary.
-assert.match(nodes, /providers\/role-composition/);
+assert.match(nodes, /providers\/runtime-composition/);
 assert.match(nodes, /binding\.provider\.generateStructured/);
 
 // Concrete default selection belongs at the outer compatibility/composition root.
@@ -64,6 +66,10 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   roleComposition,
+  /from\s+["'][^"']*(?:nvidia|claude-cli)[^"']*["']/,
+);
+assert.doesNotMatch(
+  runtimeComposition,
   /from\s+["'][^"']*(?:nvidia|claude-cli)[^"']*["']/,
 );
 

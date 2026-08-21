@@ -23,7 +23,8 @@
     "test:provider-architecture": "tsx src/test-provider-architecture.ts",
     "test:execution-policy-characterization": "tsx src/test-provider-execution-policy-characterization.ts",
     "test:provider-capabilities": "tsx src/test-provider-capabilities.ts",
-    "test:provider-hints": "tsx src/test-provider-hints.ts"
+    "test:provider-hints": "tsx src/test-provider-hints.ts",
+    "test:runtime-composition": "tsx src/test-runtime-composition.ts"
   },
   "keywords": [],
   "author": "",

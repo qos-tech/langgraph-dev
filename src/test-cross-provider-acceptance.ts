@@ -11,8 +11,8 @@ import {
 } from "./providers/claude-cli.js";
 
 import {
-  defineLlmRoleBindings,
-} from "./providers/role-composition.js";
+  defineLlmRuntimeConfig,
+} from "./providers/runtime-composition.js";
 
 import { buildDevGraph } from "./graph/build-dev-graph.js";
 
@@ -131,7 +131,7 @@ try {
     "sonnet",
   );
 
-  const mixedBindings = defineLlmRoleBindings({
+  const mixedBindings = defineLlmRuntimeConfig({
     planner: {
       provider: claudeProvider,
       model: "sonnet",

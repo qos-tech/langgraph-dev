@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type {
-  StructuredLlmProvider,
+  CapabilityAwareStructuredLlmProvider,
   StructuredLlmRequest,
 } from "./providers/contracts.js";
 
@@ -12,7 +12,11 @@ import {
 
 const calls: Array<StructuredLlmRequest<unknown>> = [];
 
-const provider: StructuredLlmProvider = {
+const provider: CapabilityAwareStructuredLlmProvider = {
+  capabilities: {
+    supportsOutputTokenLimit: true,
+    supportsTransportRetries: true,
+  },
   async generateStructured<T>(request: StructuredLlmRequest<T>) {
     calls.push(request as StructuredLlmRequest<unknown>);
 
