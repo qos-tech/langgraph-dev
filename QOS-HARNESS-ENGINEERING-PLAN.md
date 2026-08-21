@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** ✅ H0-002A Step 5 accepted
+**Current task:** `H0-003 — Benchmark Runner`
+**Task status:** ✅ H0-002A accepted
 
 ---
 
@@ -12868,3 +12868,318 @@ Step 6 must not add a new intake feature, API integration, repository resolver,
 benchmark runner, or provider behavior.
 
 **Decision:** proceed to H0-002A Step 6 — Acceptance / Architecture Review.
+
+## H0-002A Step 6 — Acceptance / Architecture Review
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Close H0-002A with one deterministic acceptance test that proves the complete
+task-intake/application architecture introduced by Steps 1-5.
+
+This step adds no new runtime behavior.
+
+### Final architecture under acceptance
+
+```text
+manual/executable producer
+        ↓
+Manual Intake Adapter
+        ↓
+Deterministic Task Normalizer
+        ↓
+NormalizedHarnessTask
+        +
+ResolvedWorkspace
+        +
+optional execution policy
+        ↓
+Application run boundary
+        ↓
+public graph boundary
+        ↓
+Harness Core
+```
+
+### Files
+
+Create:
+
+```text
+src/test-h0-002a-acceptance.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Acceptance criteria
+
+- [x] versioned normalized task contract remains intact.
+- [x] repository identity remains machine-independent.
+- [x] `repositoryPath` remains outside normalized task identity.
+- [x] manual intake requires explicit repository identity.
+- [x] manual intake carries concrete workspace path separately.
+- [x] deterministic normalization remains provider/graph independent.
+- [x] entrypoint delegates intake and execution.
+- [x] entrypoint contains no direct graph/telemetry orchestration.
+- [x] application execution consumes normalized task + resolved workspace.
+- [x] application boundary reaches Harness core through public graph boundary.
+- [x] application boundary does not cross graph/provider internals.
+- [x] H-ARCH public-boundary guard covers the application layer.
+- [x] generalized dependency/cycle guard remains active.
+- [x] no production source changes in Step 6.
+- [x] no new runtime dependency is added.
+- [x] all H0-002A Step 1-5 tests remain green.
+- [x] H0-002/H0-001/H-ARCH regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002a-manual-intake && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization
+```
+
+### Full Step 6 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002a-manual-intake && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "test(intake): accept task intake architecture"
+```
+
+### Exit condition
+
+H0-002A is implementation-complete when this acceptance test and the complete
+regression gate pass.
+
+After final PLAN acceptance metadata and one final full gate, H0-002A may be
+marked accepted and the roadmap may return to:
+
+```text
+H0-003 — Benchmark Runner
+
+## H0-002A Final Validation Record
+
+**Status:** ✅ Accepted
+
+The H0-002A Step 6 targeted acceptance gate and the complete alpha.6 regression
+gate passed in the development environment.
+
+H0-002A is therefore accepted as the stable task-intake/application boundary
+before H0-003.
+
+### Accepted architecture
+
+```text
+manual/executable producer
+        ↓
+Manual Intake Adapter
+        ↓
+Deterministic Task Normalizer
+        ↓
+NormalizedHarnessTask
+        +
+ResolvedWorkspace
+        +
+optional execution policy
+        ↓
+runHarness(...)
+        ↓
+public graph boundary
+        ↓
+Harness Core
+```
+
+### Accepted domain/runtime separation
+
+```text
+NormalizedHarnessTask.repository
+  → machine-independent identity
+  → id + revision?
+
+ResolvedWorkspace
+  → concrete execution location
+  → repositoryPath
+```
+
+A local path is not task identity and must not be converted into one.
+
+### Accepted task-intake guarantees
+
+- one versioned integration-neutral normalized task contract exists;
+- task source is explicit;
+- manual/CLI-style intake uses deterministic normalization;
+- normalization performs no LLM call;
+- normalization performs no filesystem or Git lookup;
+- malformed task data produces deterministic structured issues;
+- constraints and acceptance criteria are explicit normalized arrays;
+- metadata remains opaque to the Harness core;
+- provider/model/runtime policy is not part of the task domain.
+
+### Accepted application-execution guarantees
+
+- `runHarness(...)` is the reusable application execution boundary;
+- it receives a normalized task and resolved workspace separately;
+- it owns one-run graph/telemetry orchestration;
+- current initial-state defaults remain preserved;
+- run-scoped LLM telemetry collection remains preserved;
+- lifecycle start/completion and telemetry persistence remain preserved;
+- deterministic dependency injection allows provider-free tests;
+- the production graph is loaded lazily only when the real execution path is
+  used;
+- application execution does not parse CLI/GitHub/Q-Flow/API payloads.
+
+### Accepted executable boundary
+
+`src/index.ts` now owns only:
+
+```text
+current manual request
+manual intake call
+runHarness(...) call
+console presentation
+```
+
+It no longer owns:
+
+```text
+graph construction
+provider composition
+run lifecycle recorder
+LLM telemetry collector
+terminal telemetry projection
+telemetry persistence
+```
+
+### Accepted architecture-guard migrations
+
+H0-001 and H-ARCH characterization tests were intentionally updated where the
+public dependency shape changed.
+
+Final guarded direction:
+
+```text
+index.ts
+  → app/run-harness.ts
+  → public graph boundary
+
+index.ts
+  → intake/manual.ts
+
+app/run-harness.ts
+  ✗ graph internals
+  ✗ concrete providers
+
+provider-neutral runtime/execution/contracts
+  ✗ concrete provider composition
+  ✗ graph/public composition
+```
+
+Generalized dependency/cycle protection remains active.
+
+### H0-003 handoff
+
+H0-003 must build on this boundary rather than create a benchmark-only execution
+path.
+
+Required direction:
+
+```text
+BenchmarkTask
+    ↓
+benchmark adapter
+    ↓
+NormalizedHarnessTask
+
+repository.id + revision
+    ↓
+benchmark workspace resolver
+    ↓
+ResolvedWorkspace
+
+NormalizedHarnessTask + ResolvedWorkspace
+    ↓
+runHarness(...)
+    ↓
+validation commands
+    ↓
+benchmark observation
+    ↓
+acceptance
+```
+
+H0-003 owns repository/revision resolution and isolated reproducible worktrees.
+
+It must not:
+
+- put local paths into normalized task identity;
+- call graph internals directly;
+- duplicate application execution;
+- move benchmark-specific validation fields into `NormalizedHarnessTask`.
+
+### Release decision
+
+H0-002A introduced a meaningful reusable application boundary and changed the
+executable composition, but remained inside H0 Benchmark Foundation.
+
+Release/tag strategy should be decided separately before or after the first
+H0-003 slice based on desired checkpoint granularity.
+
+**Decision:** H0-002A accepted. Resume roadmap at H0-003 — Benchmark Runner.
+```
