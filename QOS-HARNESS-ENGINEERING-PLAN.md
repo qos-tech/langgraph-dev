@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002 — Benchmark Task Suite`
-**Task status:** ✅ H0-002 Step 1 accepted
+**Task status:** ✅ H0-002 Step 2 accepted
 
 ---
 
@@ -8182,7 +8182,7 @@ H0-002 — Benchmark Task Suite.
 ## Status
 
 **Task:** 🚧 In progress
-**Current step:** Accepted — Step 1
+**Current step:** Accepted — Step 2
 **Planned steps:** 5
 
 ## Objective
@@ -8490,3 +8490,407 @@ Accepted decisions:
 - no new runtime dependency was added.
 
 **Decision:** proceed to H0-002 Step 2 — Define Benchmark Cases B01–B05.
+
+## H0-002 Step 2 — Define Benchmark Cases B01–B05
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Materialize the five fixed benchmark cases already committed to the engineering
+roadmap using the versioned `BenchmarkTask` contract accepted in Step 1.
+
+Step 2 defines benchmark data only.
+
+It does not create fixture repositories, resolve revisions, execute commands,
+score results, or compare models.
+
+### Fixed suite
+
+The suite is:
+
+```text
+B01 — Trivial
+B02 — Already Satisfied
+B03 — Localized Change
+B04 — Cross-file Feature
+B05 — Architectural / Ambiguous
+```
+
+Each semantic difficulty category appears exactly once.
+
+### B01 — Trivial
+
+Repository identity:
+
+```text
+fixture-simple-api
+revision: b01-v1
+```
+
+Task:
+
+```text
+Add GET /health with HTTP 200 JSON response.
+```
+
+Purpose:
+
+Measure whether the Harness can solve a small, obvious task without excessive
+planning/context overhead.
+
+Expected outcome:
+
+```text
+changes_required
+```
+
+### B02 — Already Satisfied
+
+Repository identity:
+
+```text
+fixture-health-already-present
+revision: b02-v1
+```
+
+Task:
+
+```text
+Ensure GET /health exists, while the requested behavior is already present.
+```
+
+Purpose:
+
+Measure whether the Harness can recognize existing behavior and stop without
+unnecessary modifications.
+
+Expected outcome:
+
+```text
+already_satisfied
+```
+
+### B03 — Localized Change
+
+Repository identity:
+
+```text
+fixture-component-app
+revision: b03-v1
+```
+
+Task:
+
+```text
+Add an optional compact mode to a known StatusBadge component while preserving
+its default behavior and accessible semantic status text.
+```
+
+Purpose:
+
+Measure a constrained implementation where the relevant component is known and
+the correct scope should remain small.
+
+Expected outcome:
+
+```text
+changes_required
+```
+
+### B04 — Cross-file Feature
+
+Repository identity:
+
+```text
+qflow-workflow-canvas
+revision: b04-v1
+```
+
+Task:
+
+Evolve the Q-Flow Workflow Canvas toward the n8n-like behavior already selected
+as the representative cross-file benchmark:
+
+- canvas-local node addition;
+- insertion between connected nodes;
+- edge removal/insertion actions;
+- preserve `@xyflow/react`;
+- preserve draft source of truth;
+- preserve plugin registry;
+- preserve visual identity.
+
+Purpose:
+
+Exercise repository discovery and planning across multiple real architectural
+boundaries.
+
+Expected outcome:
+
+```text
+changes_required
+```
+
+### B05 — Architectural / Ambiguous
+
+Repository identity:
+
+```text
+qos-harness-architecture
+revision: b05-v1
+```
+
+Task:
+
+Determine the correct architecture for failed provider-call telemetry before
+implementing it.
+
+The request intentionally contains a real architectural ambiguity:
+
+```text
+How should failed provider calls be recorded when portable elapsed/usage/error
+semantics are not currently guaranteed?
+```
+
+The benchmark requires repository evidence across execution, provider lifecycle,
+telemetry, and graph boundaries before concluding that implementation is safe.
+
+Purpose:
+
+Measure whether the Harness avoids unsupported architectural assumptions rather
+than forcing a code change.
+
+Expected outcome:
+
+```text
+blocked
+```
+
+for the initial `b05-v1` baseline, because the current architecture has no
+normalized failed-provider-call telemetry/error contract and Step 5 of H0-001
+explicitly avoided fabricating those metrics.
+
+A future benchmark revision may intentionally change this expected outcome after
+the repository gains that contract.
+
+### Revision policy
+
+The revisions:
+
+```text
+b01-v1
+b02-v1
+b03-v1
+b04-v1
+b05-v1
+```
+
+are benchmark-owned stable revision identifiers.
+
+They are not asserted to be Git commit hashes in H0-002.
+
+H0-003 owns repository resolution and must map each benchmark repository/revision
+pair to an isolated reproducible working tree or fixture.
+
+This avoids inventing machine-local paths or fake Git commit hashes in the
+suite definition.
+
+### Validation commands
+
+Validation commands are declared now because they are part of benchmark intent.
+
+They remain inert data until H0-003.
+
+Step 2 does not execute them.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/cases.ts
+src/test-benchmark-cases.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/state.ts
+src/index.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- create benchmark fixture repositories;
+- create Git tags/commits for benchmark revisions;
+- resolve repository IDs;
+- execute benchmark tasks;
+- execute benchmark validation commands;
+- define scoring/SFCR calculation;
+- define allowed-file-change enforcement;
+- aggregate telemetry;
+- compare models;
+- generate reports;
+- change Harness runtime behavior.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-benchmark-cases.ts
+```
+
+The Step 2 test proves only facts owned by Step 2:
+
+- exactly B01–B05 exist;
+- IDs are ordered and fixed;
+- every planned difficulty appears once;
+- expected outcomes are explicit;
+- repository IDs/revisions are non-empty;
+- repository IDs are not absolute machine-local paths;
+- constraints, success criteria and validation commands are present;
+- B02 is the explicit `already_satisfied` case;
+- B04 is the Q-Flow cross-file case;
+- B05 is the initial blocked architectural case.
+
+Deeper suite invariants belong to Step 4.
+
+### Step 2 gate
+
+```bash
+npm run typecheck && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/cases.ts` exists.
+- [x] exactly five benchmark cases exist.
+- [x] case IDs are B01 through B05.
+- [x] every planned semantic difficulty appears exactly once.
+- [x] B01 represents a trivial required code change.
+- [x] B02 represents already-satisfied detection.
+- [x] B03 represents a localized component change.
+- [x] B04 represents the Q-Flow cross-file Workflow Canvas feature.
+- [x] B05 represents architectural ambiguity requiring evidence first.
+- [x] every case has an explicit repository ID and revision.
+- [x] no case uses a machine-local absolute repository path.
+- [x] every case has explicit constraints.
+- [x] every case has explicit success criteria.
+- [x] every case has explicit validation commands.
+- [x] every case has an explicit expected outcome.
+- [x] B02 expects `already_satisfied`.
+- [x] B05 initially expects `blocked`.
+- [x] no fixture/checkout/runner behavior is introduced.
+- [x] no graph/provider/telemetry behavior changes.
+- [x] no new runtime dependency is added.
+- [x] benchmark case deterministic test passes.
+- [x] Step 1 benchmark contract remains green.
+- [x] alpha.5 regression gate remains green.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): define fixed benchmark cases"
+```
+
+### Exit condition
+
+Step 2 is complete when B01–B05 are fixed as literal, reviewable benchmark data
+and the complete deterministic regression gate passes.
+
+**Next:** Step 3 — Define Expected Outcomes / Acceptance Rules.
+
+## H0-002 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The fixed B01–B05 benchmark definitions and the complete deterministic alpha.5
+regression gate passed in the development environment.
+
+Accepted suite:
+
+```text
+B01 — Trivial
+  repository: fixture-simple-api / b01-v1
+  expected: changes_required
+
+B02 — Already Satisfied
+  repository: fixture-health-already-present / b02-v1
+  expected: already_satisfied
+
+B03 — Localized Change
+  repository: fixture-component-app / b03-v1
+  expected: changes_required
+
+B04 — Cross-file Feature
+  repository: qflow-workflow-canvas / b04-v1
+  expected: changes_required
+
+B05 — Architectural / Ambiguous
+  repository: qos-harness-architecture / b05-v1
+  expected: blocked
+```
+
+Accepted decisions:
+
+- the suite contains exactly five fixed benchmark cases;
+- every planned semantic difficulty appears exactly once;
+- benchmark definitions use machine-independent repository IDs/revisions;
+- B02 explicitly measures already-satisfied detection;
+- B04 fixes the Q-Flow Workflow Canvas feature as the representative cross-file
+  benchmark;
+- B05 intentionally measures evidence-first architectural restraint and starts
+  with `blocked` as the expected outcome for revision `b05-v1`;
+- constraints, success criteria and validation commands are literal benchmark
+  data;
+- repository resolution, fixture checkout, command execution, scoring, SFCR
+  calculation, telemetry aggregation and model comparison remain deferred;
+- no graph, provider, telemetry, state or executable runtime behavior changed;
+- no new runtime dependency was added.
+
+**Decision:** proceed to H0-002 Step 3 — Define Expected Outcomes / Acceptance Rules.
