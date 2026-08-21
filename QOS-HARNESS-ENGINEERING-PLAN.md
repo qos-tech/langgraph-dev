@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-002 accepted
+**Current task:** `H0-002A — Task Intake Foundation`
+**Task status:** 📋 H0-002A planned
 
 ---
 
@@ -393,6 +393,7 @@ Create reproducible telemetry and benchmark infrastructure before changing model
 
 - H0-001 — Run Telemetry Foundation
 - H0-002 — Benchmark Task Suite
+- **H0-002A — Task Intake Foundation**
 - H0-003 — Benchmark Runner
 - H0-004 — Comparison Report
 
@@ -727,6 +728,8 @@ H-ARCH-004
 H0-001
    ↓
 H0-002
+   ↓
+H0-002A
    ↓
 H0-003
    ↓
@@ -5036,6 +5039,470 @@ Next architecture task — H-ARCH-004
 ```
 
 **Decision:** H-ARCH-003 is complete.
+
+# H0-002A — Task Intake Foundation
+
+## Status
+
+**Milestone:** H0
+**Status:** 📋 Planned
+**Position:** after H0-002 / alpha.6 release, before H0-003 Benchmark Runner
+
+## Why this task exists
+
+The target architecture already starts with:
+
+```text
+USER REQUEST
+     ↓
+TASK NORMALIZER
+     ↓
+REPOSITORY INTELLIGENCE
+```
+
+but the roadmap did not yet define a concrete task that establishes how work
+enters the Harness.
+
+Without an intake boundary, future integrations risk coupling the Harness core
+directly to CLI arguments, GitHub issues, Q-Flow payloads, webhooks, benchmark
+fixtures, or self-improvement experiments.
+
+The Harness should consume one normalized task contract regardless of origin.
+
+## Objective
+
+Create the smallest stable task-intake and application-execution boundary needed
+before the Benchmark Runner and later external integrations expand the system.
+
+Target flow:
+
+```text
+external/manual task
+        ↓
+Task Intake
+        ↓
+Task Normalizer
+        ↓
+NormalizedHarnessTask
+        ↓
+runHarness(task)
+        ↓
+Harness Core
+```
+
+The first implementation remains local and deterministic.
+
+## Architectural principle
+
+The Harness is a development engine, not an integration platform.
+
+External systems produce tasks.
+
+They must not become dependencies of the core orchestration engine.
+
+Preferred direction:
+
+```text
+CLI ─────────┐
+HTTP API ────┤
+GitHub ──────┤
+Q-Flow ──────┤
+Manual UI ───┤
+Self-improve ┤
+Benchmark ───┤
+             ↓
+         Task Intake
+             ↓
+       Task Normalizer
+             ↓
+   NormalizedHarnessTask
+             ↓
+       runHarness(task)
+             ↓
+        Harness Core
+```
+
+Adapters may be added later without changing the normalized task or application
+execution contracts.
+
+## Normalized task contract direction
+
+The exact TypeScript shape must be finalized from repository evidence during
+Step 1, but the contract should cover these concepts:
+
+```text
+task identity
+source
+repository identity / requested revision
+human request
+constraints
+acceptance criteria
+metadata
+```
+
+The normalized contract must not contain GitHub-, Q-Flow-, HTTP-, CLI-,
+benchmark-runner-, or LLM-provider-specific concepts.
+
+## Source model
+
+Initial source vocabulary should be intentionally small and extensible.
+
+Expected initial sources:
+
+```text
+manual
+cli
+benchmark
+self-improvement
+```
+
+Future adapters may add:
+
+```text
+api
+github
+qflow
+webhook
+```
+
+without changing Harness planning semantics.
+
+## Repository identity
+
+Task intake must align with the machine-independent identity direction already
+established by H0-002.
+
+Do not make absolute local repository paths part of the normalized domain task
+identity.
+
+Preferred identity direction:
+
+```text
+repository:
+  id
+  revision?
+```
+
+Resolution into a concrete workspace remains outside the normalized task
+contract.
+
+Example:
+
+```text
+identity:
+  qos-harness @ v0.1.0-alpha.6
+
+execution workspace:
+  /tmp/harness-runs/<run-id>/worktree
+```
+
+These are different concepts and must remain separate.
+
+## Task normalization
+
+Normalization is deterministic wherever possible.
+
+Examples:
+
+```text
+trim/validate task text
+validate required repository identity
+normalize optional arrays
+reject blank acceptance criteria
+reject blank constraints
+preserve source metadata without leaking it into core planning
+```
+
+Normalization must not:
+
+```text
+ask an LLM to rewrite the task
+infer architecture
+guess repository paths
+invent acceptance criteria
+select models
+execute the task
+```
+
+Semantic decomposition remains a later planning concern.
+
+## Application execution boundary
+
+H0-002A must introduce a small application API:
+
+```ts
+runHarness(task)
+```
+
+Expected module direction:
+
+```text
+src/app/run-harness.ts
+```
+
+The exact signature is finalized from Step 1 evidence.
+
+Its responsibility is to execute one already-normalized Harness task.
+
+Expected ownership:
+
+```text
+receive NormalizedHarnessTask
+compose/inject runtime dependencies required for one run
+start lifecycle / telemetry
+invoke graph/core execution
+project terminal result
+persist run telemetry
+return HarnessRunResult
+```
+
+It must not:
+
+```text
+parse CLI arguments
+normalize raw task input
+resolve GitHub/Q-Flow payloads
+select a benchmark case
+clone/checkout repositories
+resolve repository.id to a local working tree
+invent task requirements
+```
+
+### Why `runHarness(task)` belongs before H0-003
+
+Without an application execution boundary, H0-003 would likely either:
+
+```text
+call the graph directly
+```
+
+or:
+
+```text
+invent a benchmark-only execution path
+```
+
+Both would create a second entry path that future CLI/API/GitHub/Q-Flow work
+would later need to replace.
+
+H0-003 should invoke the same application boundary as real tasks:
+
+```text
+BenchmarkTask
+    ↓ adapter
+NormalizedHarnessTask
+    ↓
+runHarness(task)
+```
+
+## First delivery surface
+
+The first concrete intake adapter should remain CLI/manual.
+
+Reason:
+
+- no external service dependency;
+- deterministic tests;
+- easy local development;
+- easy benchmark invocation;
+- no premature API server.
+
+The future HTTP API should be an adapter over the same intake and application
+services, not a second Harness execution path.
+
+## H0-002A planned steps
+
+1. **Characterize Current Task Entry**
+   - inspect `src/index.ts`, graph invocation, current telemetry lifecycle,
+     benchmark task shape, repository/task arguments, and current executable
+     composition;
+   - identify exactly what must move behind `runHarness(task)`;
+   - no production behavior change.
+
+2. **Define Normalized Harness Task Contract**
+   - machine-independent repository identity;
+   - explicit source;
+   - request;
+   - constraints;
+   - acceptance criteria;
+   - metadata boundary.
+
+3. **Define Deterministic Task Normalizer**
+   - validate/normalize raw intake data;
+   - no LLM;
+   - deterministic errors;
+   - no workspace resolution.
+
+4. **Extract Application `runHarness(task)`**
+   - move one-run application orchestration out of the executable entry point;
+   - preserve telemetry lifecycle and graph behavior;
+   - return an explicit application result;
+   - no CLI parsing inside application execution.
+
+5. **Introduce CLI / Manual Intake Adapter**
+   - translate existing local invocation into raw intake → normalize → runHarness;
+   - preserve current executable behavior;
+   - keep external integration concerns outside the core.
+
+6. **H0-002A Acceptance / Architecture Review**
+   - prove core execution no longer needs to understand task origin;
+   - prove CLI/manual and future benchmark execution can share one application
+     path;
+   - define the stable handoff expected by H0-003.
+
+## Acceptance criteria
+
+H0-002A is complete only when:
+
+- [ ] one integration-neutral normalized task contract exists.
+- [ ] repository identity is machine-independent.
+- [ ] concrete workspace path is not part of normalized repository identity.
+- [ ] task source is explicit.
+- [ ] constraints and acceptance criteria are explicit structured fields.
+- [ ] deterministic normalization rejects malformed/blank task data.
+- [ ] normalization does not call an LLM.
+- [ ] `runHarness(task)` exists as the application execution boundary.
+- [ ] application execution receives an already-normalized task.
+- [ ] application execution owns one-run graph/telemetry orchestration.
+- [ ] application execution does not parse CLI/GitHub/Q-Flow/API input.
+- [ ] CLI/manual intake maps into normalized task → `runHarness(task)`.
+- [ ] Harness core does not branch on GitHub, Q-Flow, HTTP, CLI, or benchmark
+      source concepts.
+- [ ] no API server is added prematurely.
+- [ ] no GitHub/Q-Flow SDK dependency is added.
+- [ ] benchmark task definitions remain unchanged unless a concrete shared
+      identity extraction is justified by Step 1 evidence.
+- [ ] H0-002 benchmark suite remains green.
+- [ ] H0-001 telemetry remains green.
+- [ ] H-ARCH boundaries remain green.
+- [ ] no new runtime integration dependency is required.
+
+## Non-goals
+
+Do not yet:
+
+- build a web UI for task submission;
+- start an HTTP server;
+- integrate GitHub;
+- integrate Q-Flow;
+- integrate Jira/Slack;
+- implement webhook listeners;
+- automatically create tasks from telemetry;
+- implement recursive self-improvement;
+- implement dynamic agent routing;
+- implement Repository Intelligence;
+- change benchmark scoring;
+- implement the Benchmark Runner itself;
+- resolve repository IDs into worktrees inside task normalization;
+- create a generic job queue.
+
+## Relationship to H0-003
+
+H0-003 remains:
+
+```text
+Benchmark Runner
+```
+
+and keeps its responsibility:
+
+```text
+benchmark repository/revision resolution
+isolated reproducible working tree
+Harness execution
+validation-command execution
+observation capture
+benchmark acceptance
+```
+
+H0-003 must not create a benchmark-only graph entry point.
+
+Required direction:
+
+```text
+BenchmarkTask
+    ↓
+benchmark adapter
+    ↓
+NormalizedHarnessTask
+    ↓
+workspace resolution / isolated execution context
+    ↓
+runHarness(task)
+```
+
+The exact relationship between normalized repository identity and resolved
+workspace context must be finalized from H0-002A/H0-003 evidence without
+putting machine-local paths into the task identity.
+
+## Relationship to future Q-Flow / GitHub integration
+
+Later:
+
+```text
+GitHub Issue
+    ↓ GitHub adapter
+
+Q-Flow workflow
+    ↓ Q-Flow/API adapter
+
+HTTP request
+    ↓ API adapter
+
+all
+    ↓
+Task Normalizer
+    ↓
+NormalizedHarnessTask
+    ↓
+runHarness(task)
+```
+
+No future adapter should inject provider/model/graph-specific behavior into the
+normalized task contract.
+
+## Self-improvement safety direction
+
+Future self-improvement tasks should enter through the same intake contract with
+an explicit source and immutable evaluation constraints.
+
+Example concept:
+
+```text
+source: self-improvement
+repository: qos-harness
+constraints:
+  - benchmark definitions are immutable
+  - benchmark acceptance rules are immutable
+  - baseline evaluator is immutable
+```
+
+The stable Harness should evaluate candidate Harness changes in isolated
+worktrees before promotion.
+
+This safety model is documented now but not implemented in H0-002A.
+
+## Release strategy
+
+Do not create a separate alpha merely for planning this insertion.
+
+After:
+
+```text
+v0.1.0-alpha.6 — Benchmark Suite Alpha
+```
+
+the sequence becomes:
+
+```text
+H0-002A Task Intake Foundation
+   ↓
+acceptance
+   ↓
+release decision based on actual scope
+   ↓
+H0-003 Benchmark Runner
+```
 
 # Release Procedure — v0.1.0-alpha.6
 
