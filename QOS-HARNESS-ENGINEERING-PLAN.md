@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** ✅ H0-002A Step 2 accepted
+**Task status:** ✅ H0-002A Step 3 accepted
 
 ---
 
@@ -11299,3 +11299,402 @@ execute the Harness
 ```
 
 **Decision:** proceed to H0-002A Step 3 — Define Deterministic Task Normalizer.
+
+## H0-002A Step 3 — Define Deterministic Task Normalizer
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Introduce the deterministic runtime boundary that converts raw task-intake data
+into the accepted `NormalizedHarnessTask` contract.
+
+This step validates and normalizes input only.
+
+It does not execute the Harness, resolve repositories, or move runtime
+orchestration out of `src/index.ts`.
+
+### New module
+
+Create:
+
+```text
+src/intake/normalize.ts
+```
+
+with:
+
+```text
+RawHarnessTaskInput
+HarnessTaskNormalizationIssueCode
+HarnessTaskNormalizationIssue
+HarnessTaskNormalizationError
+normalizeHarnessTask(...)
+```
+
+### Raw input boundary
+
+`RawHarnessTaskInput` mirrors the externally supplied task concepts without
+pretending they are already normalized:
+
+```text
+id
+source: string
+repository:
+  id
+  revision?
+request
+constraints?
+acceptanceCriteria?
+metadata?
+```
+
+The raw source remains `string`.
+
+The normalizer owns conversion into the closed Step 2 source vocabulary.
+
+### Deterministic normalization rules
+
+Normalize:
+
+```text
+task ID → trim
+source → trim + validate
+repository.id → trim
+repository.revision → trim when present
+request → trim
+constraints → optional → [] + trim each entry
+acceptanceCriteria → optional → [] + trim each entry
+metadata → optional → {}
+```
+
+Reject:
+
+```text
+blank task ID
+unsupported/blank source
+blank repository ID
+absolute repository ID
+blank repository revision when explicitly supplied
+blank request
+blank constraint entry
+blank acceptance-criterion entry
+```
+
+### Repository-path rule
+
+Repository identity remains machine-independent.
+
+The normalizer rejects obvious absolute path forms:
+
+```text
+POSIX absolute
+Windows drive absolute
+UNC absolute
+```
+
+It does not resolve repository IDs or inspect the filesystem.
+
+### Error model
+
+Normalization errors are deterministic application-input errors.
+
+Introduce:
+
+```text
+HarnessTaskNormalizationError
+```
+
+with stable issue codes.
+
+The normalizer reports all detected issues rather than failing at the first
+problem.
+
+Stable Step 3 issue codes:
+
+```text
+blank_id
+unsupported_source
+blank_repository_id
+absolute_repository_id
+blank_repository_revision
+blank_request
+blank_constraint
+blank_acceptance_criterion
+```
+
+### Deliberate non-validation
+
+Step 3 does not reject:
+
+```text
+empty constraints array
+empty acceptanceCriteria array
+unknown metadata keys
+missing repository revision
+```
+
+These are valid for a general Harness task.
+
+Step 3 also does not interpret task semantics.
+
+### Metadata behavior
+
+Metadata remains opaque.
+
+If supplied, the same metadata record is retained rather than cloned or
+interpreted.
+
+Core execution must not branch on external metadata keys.
+
+### No LLM rule
+
+`normalizeHarnessTask(...)` is entirely deterministic.
+
+It must never:
+
+```text
+rewrite the task with an LLM
+infer missing acceptance criteria
+infer repository identity
+classify complexity
+select models
+```
+
+Those concerns belong elsewhere.
+
+### Files
+
+Create:
+
+```text
+src/intake/normalize.ts
+src/test-h0-002a-task-normalizer.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/intake/contracts.ts
+src/state.ts
+src/graph.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- create `runHarness(...)`;
+- change the executable entry;
+- parse real CLI flags;
+- externalize the hard-coded current task;
+- resolve `repository.id` to a workspace;
+- validate Git revisions;
+- inspect filesystem/Git state;
+- deduplicate constraints or acceptance criteria;
+- add HTTP/GitHub/Q-Flow adapters;
+- introduce LLM-based task enrichment;
+- merge benchmark validation with intake normalization.
+
+### Acceptance criteria
+
+- [x] raw task-intake type exists.
+- [x] normalization returns `NormalizedHarnessTask`.
+- [x] schema version is assigned by the normalizer.
+- [x] task ID is trimmed and blank IDs are rejected.
+- [x] source is trimmed and validated against the accepted vocabulary.
+- [x] repository ID is trimmed.
+- [x] blank repository IDs are rejected.
+- [x] obvious absolute repository paths are rejected.
+- [x] repository revision is trimmed when supplied.
+- [x] explicitly blank repository revision is rejected.
+- [x] request is trimmed and blank requests are rejected.
+- [x] missing constraints normalize to `[]`.
+- [x] missing acceptance criteria normalize to `[]`.
+- [x] blank constraint entries are rejected.
+- [x] blank acceptance-criterion entries are rejected.
+- [x] missing metadata normalizes to `{}`.
+- [x] supplied metadata remains opaque.
+- [x] all detected normalization issues are returned together.
+- [x] normalization performs no filesystem/Git access.
+- [x] normalization performs no LLM/provider call.
+- [x] `runHarness(...)` is still not introduced.
+- [x] no production runtime behavior changes.
+- [x] no new runtime dependency is added.
+- [x] Step 1/2 intake tests remain green.
+- [x] H0-002 benchmark regression remains green.
+- [x] H0-001/H-ARCH regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract
+```
+
+### Full Step 3 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(intake): normalize harness task input"
+```
+
+### Exit condition
+
+Step 3 is complete when raw task input is converted into the accepted normalized
+contract through deterministic validation only.
+
+Only then may Step 4 extract `runHarness(task)`.
+
+## H0-002A Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 3 targeted gate and complete alpha.6 regression gate passed in the
+development environment.
+
+One TypeScript-only correction was required during validation:
+
+```text
+src/intake/normalize.ts
+```
+
+The first typecheck correctly reported that `source: string` had not been
+narrowed to `HarnessTaskSource` at the final return boundary even though invalid
+sources already populate the deterministic issue list.
+
+The repair added a post-validation invariant guard so TypeScript can prove the
+accepted source type after `HarnessTaskNormalizationError` handling.
+
+This correction:
+
+- does not change accepted source semantics;
+- does not bypass accumulated normalization issues;
+- does not add a second user-visible validation path for malformed source input;
+- changes no filesystem/Git/provider/runtime behavior.
+
+Accepted normalizer behavior:
+
+```text
+raw input
+  ↓
+trim deterministic string fields
+  ↓
+validate source vocabulary
+  ↓
+validate machine-independent repository identity
+  ↓
+normalize optional arrays / metadata
+  ↓
+collect all deterministic issues
+  ↓
+NormalizedHarnessTask
+```
+
+Accepted normalization guarantees:
+
+- blank task IDs are rejected;
+- unsupported/blank sources are rejected;
+- blank repository IDs are rejected;
+- obvious POSIX/Windows/UNC absolute repository paths are rejected;
+- explicitly blank revisions are rejected;
+- blank task requests are rejected;
+- missing constraints normalize to `[]`;
+- missing acceptance criteria normalize to `[]`;
+- blank constraint entries are rejected;
+- blank acceptance-criterion entries are rejected;
+- missing metadata normalizes to `{}`;
+- supplied metadata remains opaque;
+- all detected issues are reported together;
+- no filesystem or Git lookup occurs;
+- no LLM/provider call occurs;
+- no workspace resolution occurs;
+- no task semantics are invented;
+- `runHarness(...)` is still absent;
+- no production execution behavior changed;
+- no new runtime dependency was added.
+
+### Step 4 evidence constraints
+
+Step 4 may now extract the one-run application execution boundary because the
+task data consumed by that boundary has a stable normalized contract.
+
+The extraction must preserve the current executable semantics characterized in
+Step 1:
+
+```text
+LLM telemetry collector
+run lifecycle start
+graph construction
+initial DevState
+graph invocation
+terminal telemetry projection
+run completion
+JSON telemetry persistence
+```
+
+Step 4 must not yet make CLI/manual intake use the new normalizer. That adapter
+migration remains Step 5.
+
+**Decision:** proceed to H0-002A Step 4 — Extract Application `runHarness(task)`.

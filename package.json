@@ -44,7 +44,8 @@
     "test:benchmark-suite-validation": "tsx src/test-benchmark-suite-validation.ts",
     "test:h0-002-acceptance": "tsx src/test-h0-002-acceptance.ts",
     "test:h0-002a-task-entry-characterization": "tsx src/test-h0-002a-task-entry-characterization.ts",
-    "test:h0-002a-task-contract": "tsx src/test-h0-002a-task-contract.ts"
+    "test:h0-002a-task-contract": "tsx src/test-h0-002a-task-contract.ts",
+    "test:h0-002a-task-normalizer": "tsx src/test-h0-002a-task-normalizer.ts"
   },
   "keywords": [],
   "author": "",
