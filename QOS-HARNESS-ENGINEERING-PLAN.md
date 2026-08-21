@@ -10,9 +10,9 @@
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.3`
-**Status:** Runtime Policy Alpha
-**Milestone:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening` ✅
+**Version:** `v0.1.0-alpha.4`
+**Status:** Architectural Foundation Alpha
+**Milestone:** `H-ARCH-004 — Establish Architectural Tests and Boundaries` ✅
 
 ### Architecture Milestone
 
@@ -56,13 +56,13 @@ npm run test:tools
 
 ### Release significance
 
-`v0.1.0-alpha.2` represents the provider-abstraction architecture baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
+`v0.1.0-alpha.4` represents the completed architectural-foundation baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
 
-The release proves provider-neutral graph execution with NVIDIA and Claude CLI behind the same structured LLM contract, including mixed-provider composition and deterministic architecture boundaries.
+The release proves modular graph boundaries, provider substitution, capability-aware runtime composition, safe provider cancellation semantics, deterministic dependency/cycle guards, and protected public/composition boundaries.
 
-### Next architecture task
+### Next milestone
 
-`H-ARCH-004 — Establish Architectural Tests and Boundaries`
+`H0-001 — Run Telemetry Foundation`
 
 # 1. Product Objective
 
@@ -5037,15 +5037,24 @@ Next architecture task — H-ARCH-004
 
 **Decision:** H-ARCH-003 is complete.
 
-# Release Procedure — v0.1.0-alpha.3
+# Release Procedure — v0.1.0-alpha.4
 
-`H-ARCH-003` is accepted. Prepare the `Runtime Policy Alpha` release only after
-the Step 7 acceptance commit exists.
+`H-ARCH-004` and the complete `H-ARCH` milestone are accepted.
+
+Release name:
+
+```text
+v0.1.0-alpha.4 — Architectural Foundation Alpha
+```
 
 Run the final deterministic release gate:
 
 ```bash
 npm run typecheck && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
 npm run test:harch003-acceptance && \
 npm run test:provider-lifecycle && \
 npm run test:llm-execution && \
@@ -5065,32 +5074,21 @@ npm run test:graph-characterization && \
 npm run test:tools
 ```
 
-The live NVIDIA/Claude acceptance from the provider-abstraction release does not
-need to become part of every deterministic architecture gate. Run it as an
-explicit release smoke if provider credentials/quota are available:
+The live NVIDIA/Claude smoke remains optional for this release because H-ARCH-004
+introduced no provider runtime behavior:
 
 ```bash
 npm run test:cross-provider-live
 ```
 
-Update package metadata:
+Review release metadata:
 
 ```bash
-npm version 0.1.0-alpha.3 --no-git-tag-version
-git diff -- package.json package-lock.json
+git diff -- package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
+git diff --check
 ```
 
-After the version command, update the top `Current Release` block in this plan
-from `v0.1.0-alpha.2` to:
-
-```text
-Version: v0.1.0-alpha.3
-Status: Runtime Policy Alpha
-Milestone: H-ARCH-003 — Execution Policy / Runtime Composition Hardening ✅
-Next architecture task: H-ARCH-004 — Establish Architectural Tests and Boundaries
-```
-
-Stage and review the release-only metadata:
+Stage:
 
 ```bash
 git add \
@@ -5098,7 +5096,11 @@ git add \
   package-lock.json \
   CHANGELOG.md \
   QOS-HARNESS-ENGINEERING-PLAN.md
+```
 
+Review staged release:
+
+```bash
 git diff --cached --stat
 git diff --cached
 git diff --cached --check
@@ -5107,23 +5109,27 @@ git diff --cached --check
 Create the release commit:
 
 ```bash
-git commit -m "chore(release): prepare v0.1.0-alpha.3"
+git commit -m "chore(release): prepare v0.1.0-alpha.4"
 ```
 
-Create and verify the annotated tag:
+Create the annotated tag:
 
 ```bash
-git tag -a v0.1.0-alpha.3 \
-  -m "QOS Harness v0.1.0-alpha.3 - runtime policy"
+git tag -a v0.1.0-alpha.4 \
+  -m "QOS Harness v0.1.0-alpha.4 - architectural foundation"
+```
 
-git show v0.1.0-alpha.3 --stat
+Verify:
+
+```bash
+git show v0.1.0-alpha.4 --stat
 ```
 
 Publish:
 
 ```bash
 git push origin main
-git push origin v0.1.0-alpha.3
+git push origin v0.1.0-alpha.4
 ```
 
 Final verification:
@@ -5131,11 +5137,14 @@ Final verification:
 ```bash
 git status
 git tag --list "v0.1.0*"
+git ls-remote --tags origin "v0.1.0-alpha.4"
 ```
 
-After publication, development continues with:
+After publication, development proceeds to:
 
-`H-ARCH-004 — Establish Architectural Tests and Boundaries`
+```text
+H0-001 — Run Telemetry Foundation
+```
 
 # H-ARCH-004 — Establish Architectural Tests and Boundaries
 

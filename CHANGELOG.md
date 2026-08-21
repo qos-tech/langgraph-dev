@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.1.0-alpha.4] - 2026-08-21
+
+### Added
+
+- Deterministic characterization of core module dependency boundaries
+- Production TypeScript dependency graph and circular-dependency guard
+- Public/composition boundary regression tests
+- Final H-ARCH-004 architecture acceptance test
+
+### Changed
+
+- Architectural boundaries established in H-ARCH-001/002/003 are now enforced as repository-level invariants
+- `src/graph.ts` is explicitly protected as the outer compatibility/default-composition boundary
+- Graph internals are protected from depending back on `src/graph.ts`
+- Graph builder and graph nodes are protected from selecting concrete provider composition
+- Provider runtime core is protected from importing concrete adapters or graph/public composition
+
+### Architecture
+
+- Production source dependency graph must remain acyclic
+- Graph internals must remain provider-neutral
+- `providers/default-composition.ts` remains the concrete provider-selection root
+- Runtime composition and execution boundaries remain provider-neutral
+- Existing public compatibility exports are guarded during the architectural-foundation phase
+- H-ARCH architectural foundation is considered complete
+
+### Validation
+
+- TypeScript typecheck
+- H-ARCH-004 final architecture acceptance
+- Public/composition boundary guards
+- Module dependency and cycle guards
+- Dependency-boundary characterization
+- H-ARCH-003 runtime acceptance
+- Provider lifecycle, execution, runtime composition, hints and capabilities
+- Provider architecture and cross-provider acceptance
+- Provider composition, injection and contract tests
+- Prompt and graph characterization
+- Repository tools tests
+
+### Milestone
+
+```text
+H-ARCH-001 ✅ Modularize Core Harness Without Behavior Changes
+H-ARCH-002 ✅ LLM Provider Contract
+H-ARCH-003 ✅ Execution Policy / Runtime Composition Hardening
+H-ARCH-004 ✅ Architectural Tests and Boundaries
+
+H-ARCH ✅ COMPLETE
+```
+
+### Next
+
+- `H0-001 — Run Telemetry Foundation`
+- Benchmark and telemetry work now takes priority over additional architecture-only refactoring
+
 ## [0.1.0-alpha.3] - 2026-08-20
 
 ### Added
