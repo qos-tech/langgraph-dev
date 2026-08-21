@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Run Telemetry Foundation`
-**Task status:** Ready to spec
+**Current task:** `H0-001 — Step 1: Characterize Run Lifecycle and Telemetry Inputs`
+**Task status:** ✅ Accepted — Step 1
 
 ---
 
@@ -6171,4 +6171,277 @@ Further architecture-only refactoring is deferred unless later benchmark or
 product evidence exposes a concrete defect.
 
 **Decision:** proceed to `H0-001 — Run Telemetry Foundation`.
+
+# H0 — Benchmark Foundation
+
+## H0-001 — Run Telemetry Foundation
+
+**Status:** 🚧 In progress
+**Current step:** Accepted — Step 1
+**Release baseline:** `v0.1.0-alpha.4`
+
+## Milestone objective
+
+Create the smallest deterministic run-telemetry foundation required to measure
+Harness executions before model strategy, context strategy, or benchmark
+comparisons are changed.
+
+Initial persistence target:
+
+```text
+.runs/
+  <run-id>.json
+```
+
+No database or dashboard is introduced in H0-001.
+
+The first telemetry schema should be grounded in data the Harness already
+produces rather than speculative observability fields.
+
+## Planned steps
+
+1. **Characterize Run Lifecycle and Telemetry Inputs**
+2. **Define Run Telemetry Contract**
+3. **Create Run Lifecycle Recorder**
+4. **Persist Run Record**
+5. **Capture LLM Call Metrics**
+6. **Telemetry Acceptance / H0-001 Review**
+
+The sequence may be reduced if characterization shows that a planned
+abstraction is unnecessary.
+
+---
+
+## H0-001 Step 1 — Characterize Run Lifecycle and Telemetry Inputs
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Freeze the current execution lifecycle and identify telemetry data that already
+exists before introducing any production telemetry code.
+
+This is characterization only.
+
+No runtime behavior changes are allowed.
+
+### Current lifecycle evidence
+
+The current executable path is:
+
+```text
+src/index.ts
+  → devGraph.invoke(...)
+  → graph nodes
+  → terminal report/failed node
+```
+
+The entry point already supplies run identity and execution-control inputs:
+
+```text
+task
+repositoryPath
+planningAttempts
+reviewAttempts
+attempts
+maxAttempts
+status
+```
+
+`DevState` already contains additional telemetry candidates:
+
+```text
+repositoryContext
+fileContents
+recentlyReadFiles
+filesChanged
+validationOutput
+failureReason
+status
+```
+
+Graph nodes already expose deterministic observation points for:
+
+```text
+planning attempt increments
+review attempt increments
+files read
+failure reason
+completed terminal status
+failed terminal status
+```
+
+### Current telemetry absence
+
+Before H0-001 production work there is intentionally no:
+
+```text
+runId
+startedAt
+finishedAt
+durationMs
+RunTelemetry
+.runs persistence
+```
+
+Step 1 characterizes this absence so later steps introduce telemetry
+deliberately rather than mixing it into unrelated runtime code.
+
+### Characterization test
+
+Create:
+
+```text
+src/test-run-lifecycle-characterization.ts
+```
+
+The test statically characterizes:
+
+- executable entry through `devGraph.invoke(...)`;
+- task and repository identity at run start;
+- current run-control counters/defaults;
+- `DevState` fields usable as telemetry inputs;
+- current status vocabulary;
+- deterministic node-level counter/terminal observation points;
+- absence of run telemetry/persistence infrastructure.
+
+No graph invocation and no real provider usage is required.
+
+### Why static characterization first
+
+H0-001 will introduce cross-cutting instrumentation.
+
+Without a frozen baseline it would be easy to accidentally:
+
+- change state semantics while adding metrics;
+- couple telemetry to one provider;
+- make `.runs` persistence part of graph/domain state;
+- derive metrics from values that are not actually available at lifecycle
+  boundaries.
+
+Step 1 prevents that by recording existing evidence first.
+
+### Files
+
+Create:
+
+```text
+src/test-run-lifecycle-characterization.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Non-goals
+
+Do not yet:
+
+- define `RunTelemetry`;
+- generate run IDs;
+- create `.runs/`;
+- write JSON files;
+- add clocks/timers to runtime;
+- instrument provider calls;
+- add token/cost aggregation;
+- add OpenTelemetry;
+- add a database;
+- add a dashboard;
+- change DevState;
+- change graph topology;
+- change prompts/models/providers.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] run-lifecycle characterization test exists.
+- [x] executable graph invocation boundary is characterized.
+- [x] task/repository run identity inputs are characterized.
+- [x] current run-control counters/defaults are characterized.
+- [x] telemetry-relevant `DevState` inputs are characterized.
+- [x] current status vocabulary is characterized.
+- [x] planning/review attempt observation points are characterized.
+- [x] terminal completed/failed observation points are characterized.
+- [x] files-read/failure observation points are characterized.
+- [x] absence of run telemetry/persistence infrastructure is recorded.
+- [x] no production source changes.
+- [x] no new dependency is added.
+- [x] full H-ARCH/alpha.4 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "test(telemetry): characterize run lifecycle"
+```
+
+### Exit condition
+
+Step 1 is complete when the current run lifecycle and telemetry inputs are
+deterministically characterized and the complete regression gate passes.
+
+**Next:** Step 2 — Define Run Telemetry Contract.
+
+
+## H0-001 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic H0-001 Step 1 gate passed in the development
+environment on the `v0.1.0-alpha.4` architectural-foundation baseline.
+
+Accepted characterization:
+
+- the executable run begins in `src/index.ts` through `devGraph.invoke(...)`;
+- `task` and `repositoryPath` are available at run start;
+- planning/review/task attempt counters and current defaults are characterized;
+- telemetry-relevant `DevState` fields are characterized;
+- the current run-status vocabulary is frozen as evidence;
+- planning and review attempt increments have deterministic observation points;
+- completed and failed terminal statuses have deterministic observation points;
+- file-read count and failure-reason observation points are characterized;
+- no `RunTelemetry`, run ID, timestamps, duration, or `.runs` persistence exists yet;
+- no production source changed;
+- no new dependency was added;
+- the complete H-ARCH/alpha.4 deterministic regression gate remained green.
+
+### Design consequence
+
+Step 2 may now define the run-telemetry contract from observed lifecycle data.
+
+Telemetry should remain outside `DevState` unless a later step produces concrete
+evidence that graph state itself must carry a telemetry concern.
+
+**Decision:** proceed to Step 2 — Define Run Telemetry Contract.
 

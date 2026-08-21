@@ -31,7 +31,8 @@
     "test:architecture-boundaries-characterization": "tsx src/test-architecture-boundaries-characterization.ts",
     "test:architecture-dependencies": "tsx src/test-architecture-dependencies.ts",
     "test:architecture-public-boundaries": "tsx src/test-architecture-public-boundaries.ts",
-    "test:harch004-acceptance": "tsx src/test-harch004-acceptance.ts"
+    "test:harch004-acceptance": "tsx src/test-harch004-acceptance.ts",
+    "test:run-lifecycle-characterization": "tsx src/test-run-lifecycle-characterization.ts"
   },
   "keywords": [],
   "author": "",
