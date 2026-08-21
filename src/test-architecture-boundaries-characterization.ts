@@ -115,17 +115,24 @@ function importsOf(module: string): string[] {
  * These assertions intentionally freeze the CURRENT dependency shape.
  * They are characterization, not the final architecture rule engine.
  *
- * Later steps may replace these point assertions with generalized dependency
- * and cycle guards, but only after the existing boundaries are explicit.
+ * H0-002A Step 5 intentionally migrated the executable entry point away from
+ * direct graph/telemetry composition and onto the application + manual-intake
+ * boundaries. The characterization below records that new dependency shape
+ * while preserving the remaining H-ARCH-004 module boundaries.
  */
 
 assert.deepEqual(importsOf("index.ts"), [
-  "./graph.js",
-  "./telemetry/completion.js",
-  "./telemetry/llm-calls.js",
-  "./telemetry/recorder.js",
-  "./telemetry/store.js",
+  "./app/run-harness.js",
+  "./intake/manual.js",
 ]);
+
+assert.equal(
+  importsOf("index.ts").some((specifier) =>
+    specifier === "./graph.js" || specifier.startsWith("./telemetry/"),
+  ),
+  false,
+  "executable entry must no longer depend directly on graph/telemetry composition.",
+);
 
 assert.deepEqual(importsOf("graph.ts"), [
   "./providers/default-composition.js",
@@ -247,4 +254,4 @@ assert.equal(
   "graph nodes are currently provider-neutral.",
 );
 
-console.log("✅ H-ARCH-004 Step 1 dependency-boundary characterization passed.");
+console.log("✅ H-ARCH-004 Step 1 dependency-boundary characterization passed after H0-002A entrypoint migration.");

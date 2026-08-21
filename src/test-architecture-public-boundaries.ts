@@ -7,6 +7,7 @@ async function source(path: string): Promise<string> {
 
 const [
   entrypoint,
+  runHarness,
   graphBoundary,
   builder,
   nodes,
@@ -17,6 +18,7 @@ const [
   roleComposition,
 ] = await Promise.all([
   source("./index.ts"),
+  source("./app/run-harness.ts"),
   source("./graph.ts"),
   source("./graph/build-dev-graph.ts"),
   source("./graph/nodes.ts"),
@@ -28,14 +30,26 @@ const [
 ]);
 
 /**
- * H-ARCH-004 / Step 3
+ * H-ARCH-004 / Step 3 + H0-002A / Step 5
  *
- * Protect the current public/composition boundaries without redesigning them.
+ * Protect the public/composition boundaries after the application-boundary
+ * migration without weakening the original architecture constraints.
  */
 
-// The executable entry point must continue through the public graph boundary,
-// rather than selecting providers or constructing the graph directly.
-assert.match(entrypoint, /from\s+["']\.\/graph\.js["']/);
+// The executable entry point now delegates through the application boundary
+// and manual intake adapter instead of reaching graph composition directly.
+assert.match(
+  entrypoint,
+  /from\s+["']\.\/app\/run-harness\.js["']/,
+);
+assert.match(
+  entrypoint,
+  /from\s+["']\.\/intake\/manual\.js["']/,
+);
+assert.doesNotMatch(
+  entrypoint,
+  /from\s+["']\.\/graph\.js["']/,
+);
 assert.doesNotMatch(
   entrypoint,
   /providers\/(?:default-composition|nvidia|claude-cli)/,
@@ -43,7 +57,22 @@ assert.doesNotMatch(
 assert.doesNotMatch(entrypoint, /graph\/build-dev-graph/);
 assert.doesNotMatch(entrypoint, /createGraphNodes/);
 
-// graph.ts is the current outer compatibility/default-composition boundary.
+// The application boundary owns the handoff to the public graph boundary.
+// It must not depend on graph internals or concrete provider implementations.
+assert.match(
+  runHarness,
+  /await\s+import\(["']\.\.\/graph\.js["']\)/,
+);
+assert.doesNotMatch(
+  runHarness,
+  /graph\/build-dev-graph|graph\/nodes/,
+);
+assert.doesNotMatch(
+  runHarness,
+  /providers\/(?:default-composition|nvidia|claude-cli)/,
+);
+
+// graph.ts remains the outer compatibility/default-composition boundary.
 assert.match(
   graphBoundary,
   /from\s+["']\.\/providers\/default-composition\.js["']/,
@@ -142,4 +171,6 @@ assert.doesNotMatch(
   /providers\/(?:nvidia|claude-cli)/,
 );
 
-console.log("✅ H-ARCH-004 Step 3 public/composition boundary guards passed.");
+console.log(
+  "✅ H-ARCH-004 Step 3 public/composition boundary guards passed after H0-002A application-boundary migration.",
+);

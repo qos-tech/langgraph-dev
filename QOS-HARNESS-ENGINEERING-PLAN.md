@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** ✅ H0-002A Step 4 accepted
+**Task status:** ✅ H0-002A Step 5 accepted
 
 ---
 
@@ -12373,3 +12373,498 @@ After Step 5, the old collector/recorder/graph/store orchestration must no
 longer remain duplicated in `src/index.ts`.
 
 **Decision:** proceed to H0-002A Step 5 — Introduce CLI / Manual Intake Adapter.
+
+## H0-002A Step 5 — Introduce CLI / Manual Intake Adapter
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Migrate the current executable entry onto the normalized task-intake and
+application execution boundaries established in Steps 2-4.
+
+After this step, `src/index.ts` is only an adapter/presentation entry point.
+
+The old one-run graph/telemetry composition must no longer remain duplicated
+there.
+
+### Explicit environment boundary
+
+The manual executable now requires two distinct repository concepts:
+
+```text
+TARGET_REPOSITORY
+  → concrete local execution path
+
+TARGET_REPOSITORY_ID
+  → machine-independent repository identity
+```
+
+Optional:
+
+```text
+TARGET_REPOSITORY_REVISION
+  → requested/known repository revision
+
+MAX_PLANNING_ATTEMPTS
+  → execution-policy override
+```
+
+Example:
+
+```text
+TARGET_REPOSITORY=/Users/example/Projects/qflow
+TARGET_REPOSITORY_ID=qflow
+TARGET_REPOSITORY_REVISION=main
+```
+
+The adapter must never derive `TARGET_REPOSITORY_ID` from
+`TARGET_REPOSITORY`.
+
+### Why repository ID is now required
+
+Before H0-002A, the executable only knew a local path.
+
+Steps 2-4 established that:
+
+```text
+repository identity
+  ≠
+resolved execution workspace
+```
+
+Inventing identity from:
+
+```text
+basename(repositoryPath)
+"local"
+repositoryPath itself
+```
+
+would break that boundary.
+
+The manual producer must therefore provide repository identity explicitly.
+
+### New manual intake adapter
+
+Create:
+
+```text
+src/intake/manual.ts
+```
+
+with:
+
+```text
+ManualHarnessIntakeInput
+createManualHarnessRunRequest(...)
+```
+
+The adapter owns:
+
+```text
+read raw manual environment values
+validate required workspace path
+validate required repository identity presence
+build raw task input
+normalizeHarnessTask(...)
+build ResolvedWorkspace
+map optional MAX_PLANNING_ATTEMPTS to execution policy
+return RunHarnessRequest
+```
+
+It does not:
+
+```text
+execute the Harness
+import graph/provider code
+persist telemetry
+derive repository identity
+inspect Git
+resolve revisions
+```
+
+### Current task migration
+
+The existing Q-Flow workflow-canvas request remains hard-coded in `src/index.ts`
+for this step.
+
+This preserves behavior while moving execution architecture.
+
+Use the stable manual task ID:
+
+```text
+qflow-workflow-canvas-analysis
+```
+
+Externalizing arbitrary task text/ID is outside this step.
+
+### Executable flow after migration
+
+Target:
+
+```text
+hard-coded current request
+        ↓
+createManualHarnessRunRequest({
+  env: process.env,
+  taskId,
+  request,
+})
+        ↓
+NormalizedHarnessTask
++
+ResolvedWorkspace
++
+optional execution policy
+        ↓
+runHarness(...)
+        ↓
+console telemetry path
+console final state
+```
+
+### Old orchestration removed from `src/index.ts`
+
+After migration, `src/index.ts` must no longer own/import:
+
+```text
+buildDevGraph
+buildRunTelemetryCompletion
+createLlmCallTelemetryCollector
+createRunLifecycleRecorder
+createJsonRunTelemetryStore
+graph.invoke(...)
+activeRun.complete(...)
+telemetryStore.save(...)
+```
+
+Those responsibilities belong to `runHarness(...)`.
+
+### MAX_PLANNING_ATTEMPTS compatibility
+
+When `MAX_PLANNING_ATTEMPTS` is present:
+
+```text
+Number(value)
+  → RunHarnessRequest.execution.maxPlanningAttempts
+```
+
+When absent:
+
+```text
+execution omitted
+  → runHarness default remains 4
+```
+
+This preserves the existing effective default.
+
+### Characterization migration
+
+The Step 1 source-characterization test must be updated because its old
+assertions intentionally described pre-H0-002A ownership.
+
+The updated characterization now proves:
+
+```text
+index delegates intake
+index delegates execution
+index retains current task/presentation only
+manual adapter separates identity from workspace
+old one-run composition is absent from index
+telemetry contracts remain unchanged
+benchmark repository identity remains unchanged
+```
+
+This is an intentional migration of the characterized boundary, not silent test
+weakening.
+
+### Files
+
+Create:
+
+```text
+src/intake/manual.ts
+src/test-h0-002a-manual-intake.ts
+```
+
+Modify:
+
+```text
+src/index.ts
+src/test-h0-002a-task-entry-characterization.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/app/run-harness.ts
+src/intake/contracts.ts
+src/intake/normalize.ts
+src/state.ts
+src/graph.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- accept arbitrary task text from CLI arguments;
+- add a CLI parser dependency;
+- add HTTP/API submission;
+- add GitHub/Q-Flow adapters;
+- generate task IDs dynamically;
+- infer repository identity from a local path;
+- resolve Git revisions/worktrees;
+- implement benchmark runner behavior;
+- change telemetry schema;
+- change graph/provider behavior.
+
+### Acceptance criteria
+
+- [x] manual intake adapter exists.
+- [x] `TARGET_REPOSITORY` remains the explicit concrete workspace path.
+- [x] `TARGET_REPOSITORY_ID` is required as explicit repository identity.
+- [x] `TARGET_REPOSITORY_REVISION` is optional.
+- [x] repository ID is never derived from repository path.
+- [x] raw manual task passes through `normalizeHarnessTask(...)`.
+- [x] normalized task source is `manual`.
+- [x] current task text remains behaviorally unchanged.
+- [x] stable current manual task ID is explicit.
+- [x] `MAX_PLANNING_ATTEMPTS` maps into execution policy when provided.
+- [x] absent `MAX_PLANNING_ATTEMPTS` defers to `runHarness` default.
+- [x] `src/index.ts` invokes `runHarness(...)`.
+- [x] `src/index.ts` prints persisted telemetry path from `HarnessRunResult`.
+- [x] `src/index.ts` prints final graph state from `HarnessRunResult`.
+- [x] `src/index.ts` no longer imports graph orchestration.
+- [x] `src/index.ts` no longer imports telemetry orchestration.
+- [x] old one-run execution composition is removed from `src/index.ts`.
+- [x] updated characterization explicitly protects the migrated boundary.
+- [x] manual adapter tests use no real provider.
+- [x] manual adapter tests write no `.runs` files.
+- [x] no new runtime dependency is added.
+- [x] Step 2-4 intake/application regression remains green.
+- [x] H0-002 benchmark regression remains green.
+- [x] H0-001/H-ARCH regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-manual-intake && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract
+```
+
+### Full Step 5 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-manual-intake && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Manual smoke prerequisite
+
+The existing `npm run dev` path now additionally requires:
+
+```text
+TARGET_REPOSITORY_ID
+```
+
+and may use:
+
+```text
+TARGET_REPOSITORY_REVISION
+```
+
+No live smoke is required for the deterministic Step 5 gate because that would
+consume a real provider. A later explicit smoke may use the configured `.env`.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(intake): route manual entry through harness"
+```
+
+### Exit condition
+
+Step 5 is complete when the executable routes its current manual request through
+deterministic task normalization and the reusable application boundary, with
+repository identity and concrete workspace explicitly separated.
+
+Only then may Step 6 perform H0-002A acceptance and architecture review.
+
+## H0-002A Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 5 targeted gate and complete alpha.6 regression gate passed in the
+development environment.
+
+The executable entry now routes through the accepted intake/application path:
+
+```text
+current manual request
+  ↓
+createManualHarnessRunRequest(...)
+  ↓
+normalizeHarnessTask(...)
+  ↓
+NormalizedHarnessTask
++
+ResolvedWorkspace
++
+optional execution policy
+  ↓
+runHarness(...)
+  ↓
+HarnessRunResult
+  ↓
+console presentation
+```
+
+Accepted environment boundary:
+
+```text
+TARGET_REPOSITORY
+  → concrete local workspace path
+
+TARGET_REPOSITORY_ID
+  → machine-independent repository identity
+
+TARGET_REPOSITORY_REVISION?
+  → optional repository revision
+
+MAX_PLANNING_ATTEMPTS?
+  → optional application execution override
+```
+
+Accepted migration guarantees:
+
+- `TARGET_REPOSITORY_ID` is required independently from `TARGET_REPOSITORY`;
+- repository identity is never derived from the local path;
+- optional revision passes through deterministic task normalization;
+- the current Q-Flow workflow-canvas request remains behaviorally unchanged;
+- the current manual task ID is explicit and stable;
+- `src/index.ts` delegates intake to `createManualHarnessRunRequest(...)`;
+- `src/index.ts` delegates execution to `runHarness(...)`;
+- `src/index.ts` no longer constructs graph/telemetry lifecycle directly;
+- `src/index.ts` no longer imports graph internals or telemetry composition;
+- persisted telemetry path and terminal state remain the executable output;
+- no new CLI parser/runtime dependency was added;
+- no real provider is used by the manual-intake tests;
+- no `.runs` file is written by deterministic intake/application tests.
+
+### Architecture-characterization migrations accepted during validation
+
+The Step 5 refactor intentionally changed a previously characterized public
+dependency shape. Existing H0-001/H-ARCH tests correctly detected the migration
+and were updated rather than bypassed.
+
+Accepted characterization migrations:
+
+```text
+H0-001 lifecycle characterization
+  before: index.ts owns graph + telemetry lifecycle
+  after:  run-harness.ts owns graph + telemetry lifecycle
+
+H-ARCH public boundary
+  before: index.ts → graph.ts
+  after:  index.ts → app/run-harness.ts → graph.ts
+
+H-ARCH dependency characterization
+  before: index.ts → graph.ts + telemetry/*
+  after:  index.ts → app/run-harness.ts + intake/manual.ts
+```
+
+The H-ARCH-004 final acceptance meta-gate was updated to validate the new
+application boundary while retaining all original constraints on:
+
+```text
+graph compatibility boundary
+graph internals
+provider-neutral runtime/execution/contracts
+default concrete composition
+cycle/dependency protection
+```
+
+These are intentional architecture updates caused by H0-002A, not weakened
+guards.
+
+### Step 6 evidence constraints
+
+Step 6 is acceptance/review only.
+
+It should prove the final H0-002A architecture:
+
+```text
+producer/manual entry
+  ↓
+Task Intake
+  ↓
+deterministic normalization
+  ↓
+NormalizedHarnessTask
+  +
+ResolvedWorkspace
+  ↓
+application run boundary
+  ↓
+Harness Core
+```
+
+Step 6 must not add a new intake feature, API integration, repository resolver,
+benchmark runner, or provider behavior.
+
+**Decision:** proceed to H0-002A Step 6 — Acceptance / Architecture Review.

@@ -26,85 +26,109 @@ function assertContainsInOrder(
 }
 
 const indexSource = await readSource("./index.ts");
+const manualSource = await readSource("./intake/manual.ts");
 const recorderSource = await readSource("./telemetry/recorder.ts");
 const completionSource = await readSource("./telemetry/completion.ts");
 const benchmarkContractSource = await readSource("./benchmarks/contracts.ts");
 
 assert.match(
   indexSource,
-  /const repositoryPath = process\.env\.TARGET_REPOSITORY;/,
-  "current executable entry must source the concrete repository path from TARGET_REPOSITORY",
+  /import \{ runHarness \} from "\.\/app\/run-harness\.js";/,
+  "executable entry must delegate one-run execution to runHarness",
 );
 
 assert.match(
   indexSource,
-  /if \(!repositoryPath\) \{\s*throw new Error\("TARGET_REPOSITORY não definido\."\);\s*\}/s,
-  "current executable entry must fail before graph execution when TARGET_REPOSITORY is missing",
+  /import \{ createManualHarnessRunRequest \} from "\.\/intake\/manual\.js";/,
+  "executable entry must delegate raw environment intake to the manual adapter",
 );
 
 assert.match(
   indexSource,
   /const task = `[\s\S]*?`\.trim\(\);/,
-  "current executable entry must own the hard-coded task text",
+  "current executable must preserve the hard-coded task text during Step 5 migration",
 );
 
 assertContainsInOrder(
   indexSource,
   [
-    "const llmCallCollector = createLlmCallTelemetryCollector();",
-    "const runRecorder = createRunLifecycleRecorder();",
-    "const activeRun = runRecorder.start({",
-    "task,",
-    "repositoryPath,",
-    "const graph = buildDevGraph(llmCallCollector);",
-    "const telemetryStore = createJsonRunTelemetryStore();",
-    "const result = await graph.invoke({",
+    "const request = createManualHarnessRunRequest({",
+    "env: process.env,",
+    'taskId: "qflow-workflow-canvas-analysis",',
+    "request: task,",
+    "const result = await runHarness(request);",
+    "result.persistedTelemetry.path",
+    "console.dir(result.state,",
   ],
-  "current one-run composition order",
+  "migrated executable adapter flow",
 );
 
-assertContainsInOrder(
-  indexSource,
-  [
-    "task,",
-    "repositoryPath,",
-    "fileContents: {},",
-    "fileSummaries: {},",
-    "recentlyReadFiles: [],",
-    "filesChanged: [],",
-    "attempts: 0,",
-    "maxAttempts: 3,",
-    "planningAttempts: 0,",
-    "reviewAttempts: 0,",
-    "maxPlanningAttempts: Number(process.env.MAX_PLANNING_ATTEMPTS ?? 4),",
-    "failureReason: undefined,",
-    'status: "pending",',
-  ],
-  "current graph initial state",
+for (const forbidden of [
+  'from "./graph.js"',
+  'from "./telemetry/completion.js"',
+  'from "./telemetry/llm-calls.js"',
+  'from "./telemetry/recorder.js"',
+  'from "./telemetry/store.js"',
+  "buildDevGraph(",
+  "createLlmCallTelemetryCollector(",
+  "createRunLifecycleRecorder(",
+  "createJsonRunTelemetryStore(",
+  "graph.invoke(",
+  "activeRun.complete(",
+]) {
+  assert.equal(
+    indexSource.includes(forbidden),
+    false,
+    `migrated executable must not retain old one-run orchestration: ${forbidden}`,
+  );
+}
+
+assert.match(
+  manualSource,
+  /const repositoryPath = input\.env\.TARGET_REPOSITORY;/,
+  "manual adapter must read the concrete workspace path explicitly",
 );
 
-assertContainsInOrder(
-  indexSource,
-  [
-    "const telemetry = activeRun.complete(",
-    "buildRunTelemetryCompletion(",
-    "result,",
-    "llmCallCollector.snapshot(),",
-    "const persistedTelemetry = await telemetryStore.save(telemetry);",
-  ],
-  "current terminal telemetry flow",
+assert.match(
+  manualSource,
+  /const repositoryId = input\.env\.TARGET_REPOSITORY_ID;/,
+  "manual adapter must read machine-independent repository identity explicitly",
+);
+
+assert.match(
+  manualSource,
+  /TARGET_REPOSITORY_REVISION/,
+  "manual adapter must support optional explicit repository revision",
+);
+
+assert.match(
+  manualSource,
+  /normalizeHarnessTask\(\{/,
+  "manual adapter must normalize raw task input before execution",
+);
+
+assert.match(
+  manualSource,
+  /workspace:\s*\{\s*repositoryPath,/s,
+  "manual adapter must keep repositoryPath in the resolved workspace boundary",
+);
+
+assert.doesNotMatch(
+  manualSource,
+  /id:\s*repositoryPath/,
+  "manual adapter must never derive repository identity from the local path",
 );
 
 assert.match(
   recorderSource,
   /export type StartRunTelemetryInput = Readonly<\{\s*task: string;\s*repositoryPath: string;\s*\}>;/s,
-  "current telemetry lifecycle start contract must remain task + concrete repositoryPath",
+  "telemetry lifecycle start contract must remain task + concrete repositoryPath",
 );
 
 assert.match(
   completionSource,
   /state\.status !== "completed" && state\.status !== "failed"/,
-  "current telemetry completion must require a terminal graph state",
+  "telemetry completion must continue requiring a terminal graph state",
 );
 
 assert.match(
@@ -113,16 +137,4 @@ assert.match(
   "benchmark identity must remain repository id + revision rather than a local path",
 );
 
-assert.doesNotMatch(
-  indexSource,
-  /runHarness\s*\(/,
-  "Step 1 characterizes the current entry before introducing runHarness",
-);
-
-assert.doesNotMatch(
-  indexSource,
-  /NormalizedHarnessTask/,
-  "Step 1 must not introduce the normalized task contract early",
-);
-
-console.log("✅ H0-002A Step 1 current task-entry characterization passed.");
+console.log("✅ H0-002A migrated task-entry characterization passed.");

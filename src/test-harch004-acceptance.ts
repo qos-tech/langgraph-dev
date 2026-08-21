@@ -32,11 +32,11 @@ const [
 ]);
 
 /**
- * H-ARCH-004 / Step 4
+ * H-ARCH-004 / Step 4 + H0-002A / Step 5
  *
  * Final architecture acceptance does not add another architecture mechanism.
- * It verifies that the three H-ARCH-004 guards and the existing provider
- * architecture guard cover the boundaries established by H-ARCH-001/002/003.
+ * It verifies that the H-ARCH-004 guards still protect the architecture after
+ * the executable/application-boundary migration introduced by H0-002A.
  */
 
 // Step 1: current dependency shape remains explicitly characterized.
@@ -58,14 +58,19 @@ assert.match(
   /Neutral provider runtime must not depend on concrete provider composition/,
 );
 
-// Step 3: outer public/composition semantics are protected.
+// Step 3: public/composition semantics are still protected after the
+// application-boundary migration.
 assert.match(
   publicBoundaryGuard,
-  /executable entry point must continue through the public graph boundary/i,
+  /The executable entry point now delegates through the application boundary/i,
 );
 assert.match(
   publicBoundaryGuard,
-  /graph\.ts is the current outer compatibility\/default-composition boundary/,
+  /The application boundary owns the handoff to the public graph boundary/i,
+);
+assert.match(
+  publicBoundaryGuard,
+  /graph\.ts remains the outer compatibility\/default-composition boundary/,
 );
 assert.match(
   publicBoundaryGuard,
@@ -122,10 +127,12 @@ assert.doesNotMatch(
 assert.match(defaultComposition, /from\s+["']\.\/nvidia\.js["']/);
 assert.match(defaultComposition, /defaultLlmRuntimeConfig/);
 
-// H-ARCH-004 must close without production-code changes.
+// H-ARCH-004 must remain dependency-tool neutral.
 assert.doesNotMatch(
   dependencyGuard + boundaryCharacterization + publicBoundaryGuard,
   /dependency-cruiser|from\s+["']madge["']/,
 );
 
-console.log("✅ H-ARCH-004 Step 4 final architecture acceptance passed.");
+console.log(
+  "✅ H-ARCH-004 Step 4 final architecture acceptance passed after H0-002A application-boundary migration.",
+);

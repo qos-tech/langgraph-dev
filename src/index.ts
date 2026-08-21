@@ -1,14 +1,5 @@
-import { buildDevGraph } from "./graph.js";
-import { buildRunTelemetryCompletion } from "./telemetry/completion.js";
-import { createLlmCallTelemetryCollector } from "./telemetry/llm-calls.js";
-import { createRunLifecycleRecorder } from "./telemetry/recorder.js";
-import { createJsonRunTelemetryStore } from "./telemetry/store.js";
-
-const repositoryPath = process.env.TARGET_REPOSITORY;
-
-if (!repositoryPath) {
-  throw new Error("TARGET_REPOSITORY não definido.");
-}
+import { runHarness } from "./app/run-harness.js";
+import { createManualHarnessRunRequest } from "./intake/manual.js";
 
 const task = `
 Evoluir o Workflow Canvas do Q-Flow para uma experiência de criação semelhante ao n8n. O usuário deve poder adicionar um novo node diretamente pelo canvas através de um botão/context menu próximo ao fluxo, inserir um node entre dois nodes já conectados, e acessar ações de edge para remover ou inserir um passo. Preserve a arquitetura, @xyflow/react, modelo de draft, plugin registry e identidade visual existentes. Investigue antes de alterar.
@@ -17,48 +8,15 @@ Nesta execução faça apenas análise e planejamento.
 Não modifique arquivos.
 `.trim();
 
-const llmCallCollector = createLlmCallTelemetryCollector();
-const runRecorder = createRunLifecycleRecorder();
-const activeRun = runRecorder.start({
-  task,
-  repositoryPath,
-});
-const graph = buildDevGraph(llmCallCollector);
-const telemetryStore = createJsonRunTelemetryStore();
-
-const result = await graph.invoke({
-  task,
-  repositoryPath,
-
-  fileContents: {},
-  fileSummaries: {},
-  recentlyReadFiles: [],
-
-  filesChanged: [],
-
-  attempts: 0,
-  maxAttempts: 3,
-
-  planningAttempts: 0,
-  reviewAttempts: 0,
-
-  maxPlanningAttempts: Number(process.env.MAX_PLANNING_ATTEMPTS ?? 4),
-
-  failureReason: undefined,
-
-  status: "pending",
+const request = createManualHarnessRunRequest({
+  env: process.env,
+  taskId: "qflow-workflow-canvas-analysis",
+  request: task,
 });
 
-const telemetry = activeRun.complete(
-  buildRunTelemetryCompletion(
-    result,
-    llmCallCollector.snapshot(),
-  ),
-);
+const result = await runHarness(request);
 
-const persistedTelemetry = await telemetryStore.save(telemetry);
-
-console.log(`\n📈 Run telemetry: ${persistedTelemetry.path}`);
+console.log(`\n📈 Run telemetry: ${result.persistedTelemetry.path}`);
 
 console.log("\n========================================");
 
@@ -66,6 +24,6 @@ console.log("FINAL STATE");
 
 console.log("========================================");
 
-console.dir(result, {
+console.dir(result.state, {
   depth: null,
 });
