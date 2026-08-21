@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
 **Current task:** `H-ARCH-003 — Step 5: Centralize Timeout / Retry Ownership`
-**Task status:** In progress — Step 5
+**Task status:** Accepted — Step 5
 
 ---
 
@@ -4198,7 +4198,7 @@ change Step 4 source behavior.
 
 ## H-ARCH-003 Step 5 — Centralize Timeout / Retry Ownership
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -4408,18 +4408,18 @@ npm run test:tools
 
 ### Acceptance criteria
 
-- [ ] portable LLM execution boundary exists.
-- [ ] graph nodes no longer invoke provider adapters directly.
-- [ ] execution boundary imports no concrete provider.
-- [ ] transport retry remains provider-owned.
-- [ ] no Harness-level retry is accidentally introduced.
-- [ ] no fake timeout/cancellation behavior is introduced.
-- [ ] provider exceptions still propagate unchanged.
-- [ ] provider result/timing/usage behavior remains unchanged.
-- [ ] graph topology remains unchanged.
-- [ ] provider adapters remain unchanged.
-- [ ] architecture guard protects the new dependency direction.
-- [ ] full alpha.2 regression gate remains green.
+- [x] portable LLM execution boundary exists.
+- [x] graph nodes no longer invoke provider adapters directly.
+- [x] execution boundary imports no concrete provider.
+- [x] transport retry remains provider-owned.
+- [x] no Harness-level retry is accidentally introduced.
+- [x] no fake timeout/cancellation behavior is introduced.
+- [x] provider exceptions still propagate unchanged.
+- [x] provider result/timing/usage behavior remains unchanged.
+- [x] graph topology remains unchanged.
+- [x] provider adapters remain unchanged.
+- [x] architecture guard protects the new dependency direction.
+- [x] full alpha.2 regression gate remains green.
 
 ### Commit
 
@@ -4437,6 +4437,45 @@ boundary and retry/timeout ownership is explicit without unsafe behavior.
 Step 6 must establish the cancellation/lifecycle evidence needed before a real
 portable timeout policy can be implemented.
 
+
+## H-ARCH-003 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 5 gate passed in the development environment.
+
+Accepted outcomes:
+
+```text
+graph LLM nodes
+  → resolveLlmRoleRuntime(...)
+  → executeStructuredLlm(...)
+  → provider.generateStructured(...)
+```
+
+Ownership is now explicit:
+
+```text
+transport retry
+  → concrete provider adapter
+
+whole provider-call retry
+  → portable execution boundary
+  → intentionally not implemented yet
+
+provider-call timeout
+  → portable execution boundary
+  → intentionally not implemented until cancellation/lifecycle is safe
+
+task/graph retry
+  → orchestration/state
+```
+
+The Step 5 gate also proved that the new execution boundary performs exactly
+one provider invocation, preserves the provider result/error semantics, and
+does not introduce hidden retry or fake timeout behavior.
+
+**Decision:** proceed to Step 6 — Provider Lifecycle / Process Policy.
 
 # Release Procedure — v0.1.0-alpha.2
 
