@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Step 2: Define Run Telemetry Contract`
-**Task status:** ✅ Accepted — Step 2
+**Current task:** `H0-001 — Step 3: Create Run Lifecycle Recorder`
+**Task status:** ✅ Accepted — Step 3
 
 ---
 
@@ -6177,7 +6177,7 @@ product evidence exposes a concrete defect.
 ## H0-001 — Run Telemetry Foundation
 
 **Status:** 🚧 In progress
-**Current step:** Accepted — Step 2
+**Current step:** Accepted — Step 3
 **Release baseline:** `v0.1.0-alpha.4`
 
 ## Milestone objective
@@ -6805,4 +6805,281 @@ small injectable boundaries so deterministic tests do not depend on wall clock
 or random IDs.
 
 **Decision:** proceed to Step 3 — Create Run Lifecycle Recorder.
+
+## H0-001 Step 3 — Create Run Lifecycle Recorder
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Create the smallest runtime component that assembles the Step 2 telemetry
+contract across a run lifecycle.
+
+Step 3 owns:
+
+```text
+run ID creation
+start timestamp
+finish timestamp
+duration calculation
+final RunTelemetry assembly
+```
+
+It does not persist telemetry or instrument the graph/providers yet.
+
+### Architectural decision
+
+Create:
+
+```text
+src/telemetry/recorder.ts
+```
+
+with:
+
+```ts
+createRunLifecycleRecorder(...)
+```
+
+The recorder starts a run:
+
+```text
+recorder.start({
+  task,
+  repositoryPath
+})
+```
+
+and returns an active run handle:
+
+```text
+ActiveRunTelemetry
+├── start
+└── complete(...)
+```
+
+`complete(...)` receives the telemetry data already produced by the execution
+and returns one final `RunTelemetry` record.
+
+### Dependency strategy
+
+The recorder uses tiny injectable lifecycle dependencies:
+
+```ts
+now?: () => Date
+createRunId?: () => string
+```
+
+Production defaults are:
+
+```text
+clock       → new Date()
+run ID      → crypto.randomUUID()
+```
+
+Deterministic tests inject fixed values.
+
+This avoids:
+
+- mocking global time;
+- mocking global randomness;
+- coupling tests to wall-clock speed;
+- adding a UUID dependency.
+
+### Why the recorder is outside `DevState`
+
+The recorder observes one Harness run.
+
+It does not represent graph planning state and therefore does not belong in
+LangGraph state.
+
+Step 3 does not add telemetry fields to `DevState`.
+
+### Duration policy
+
+`durationMs` is computed from the captured lifecycle timestamps.
+
+If the wall clock moves backwards, the recorder clamps the persisted duration
+to zero rather than writing a negative benchmark duration.
+
+This is intentionally a minimal wall-clock policy.
+
+A monotonic high-resolution timing source can be considered later if benchmark
+evidence proves that millisecond wall-clock timing is insufficient.
+
+### Clock validation
+
+Injected/default clock values must be valid `Date` instances with finite epoch
+milliseconds.
+
+Invalid values fail deterministically before an invalid ISO timestamp or `NaN`
+duration can enter telemetry.
+
+### Files
+
+Create:
+
+```text
+src/telemetry/recorder.ts
+src/test-run-lifecycle-recorder.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/state.ts
+src/graph/*
+src/providers/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- wire the recorder into `src/index.ts`;
+- create `.runs/`;
+- persist JSON;
+- read run history;
+- instrument LLM calls;
+- mutate `DevState`;
+- add node timings;
+- calculate token cost;
+- add benchmark-runner behavior;
+- add OpenTelemetry;
+- add database/dashboard behavior.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-run-lifecycle-recorder.ts
+```
+
+It must prove:
+
+- run IDs can be injected deterministically;
+- start time is captured exactly once at run start;
+- finish time is captured on completion;
+- duration is calculated from lifecycle timestamps;
+- successful completion produces the Step 2 `RunTelemetry` contract;
+- failed completion preserves an optional `failureReason`;
+- negative wall-clock duration is never persisted;
+- invalid clock values fail deterministically;
+- no filesystem persistence occurs;
+- no graph/provider dependency is required.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/telemetry/recorder.ts` exists.
+- [x] recorder starts a run from task/repository identity.
+- [x] run ID generation is injectable.
+- [x] clock is injectable.
+- [x] production run IDs use `crypto.randomUUID()`.
+- [x] production clock uses current `Date`.
+- [x] start timestamp is captured at lifecycle start.
+- [x] finish timestamp is captured at completion.
+- [x] duration is deterministic under an injected clock.
+- [x] negative wall-clock duration is clamped to zero.
+- [x] invalid clock values fail deterministically.
+- [x] completed run assembles the Step 2 telemetry contract.
+- [x] failed run preserves `failureReason`.
+- [x] recorder remains independent from `DevState`.
+- [x] recorder has no graph/provider dependency.
+- [x] no persistence or provider instrumentation is introduced.
+- [x] no new dependency is added.
+- [x] Step 1/2 telemetry tests remain green.
+- [x] complete H-ARCH/alpha.4 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "feat(telemetry): add run lifecycle recorder"
+```
+
+### Exit condition
+
+Step 3 is complete when run lifecycle identity/timing can be assembled
+deterministically into `RunTelemetry` without graph-state or persistence
+coupling, and the full deterministic regression gate passes.
+
+**Next:** Step 4 — Persist Run Record.
+
+
+## H0-001 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic H0-001 Step 3 gate passed on the
+`v0.1.0-alpha.4` architectural-foundation baseline.
+
+Accepted outcome:
+
+- `src/telemetry/recorder.ts` owns run lifecycle assembly;
+- run IDs are generated through an injectable factory with
+  `crypto.randomUUID()` as the production default;
+- time is supplied through an injectable clock with `new Date()` as the
+  production default;
+- start timestamps are captured exactly at lifecycle start;
+- finish timestamps are captured at lifecycle completion;
+- `durationMs` is derived deterministically from the captured lifecycle times;
+- negative wall-clock deltas are clamped to zero;
+- invalid clock values fail deterministically before invalid telemetry can be
+  produced;
+- successful and failed runs assemble the Step 2 `RunTelemetry` contract;
+- optional failure reasons are preserved;
+- the recorder remains independent from `DevState`, graph modules, and provider
+  modules;
+- no filesystem persistence, graph instrumentation, or provider
+  instrumentation was introduced;
+- no new dependency was added;
+- Step 1 and Step 2 telemetry gates remained green;
+- the complete H-ARCH/alpha.4 deterministic regression gate remained green.
+
+### Design consequence
+
+Step 4 may add persistence behind a dedicated telemetry store/writer boundary.
+
+Persistence should receive a completed `RunTelemetry` value and must not own run
+lifecycle timing, ID creation, graph state, or provider instrumentation.
+
+**Decision:** proceed to Step 4 — Persist Run Record.
 
