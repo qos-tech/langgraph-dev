@@ -1,4 +1,8 @@
-import { devGraph } from "./graph.js";
+import { buildDevGraph } from "./graph.js";
+import { buildRunTelemetryCompletion } from "./telemetry/completion.js";
+import { createLlmCallTelemetryCollector } from "./telemetry/llm-calls.js";
+import { createRunLifecycleRecorder } from "./telemetry/recorder.js";
+import { createJsonRunTelemetryStore } from "./telemetry/store.js";
 
 const repositoryPath = process.env.TARGET_REPOSITORY;
 
@@ -13,7 +17,16 @@ Nesta execução faça apenas análise e planejamento.
 Não modifique arquivos.
 `.trim();
 
-const result = await devGraph.invoke({
+const llmCallCollector = createLlmCallTelemetryCollector();
+const runRecorder = createRunLifecycleRecorder();
+const activeRun = runRecorder.start({
+  task,
+  repositoryPath,
+});
+const graph = buildDevGraph(llmCallCollector);
+const telemetryStore = createJsonRunTelemetryStore();
+
+const result = await graph.invoke({
   task,
   repositoryPath,
 
@@ -35,6 +48,17 @@ const result = await devGraph.invoke({
 
   status: "pending",
 });
+
+const telemetry = activeRun.complete(
+  buildRunTelemetryCompletion(
+    result,
+    llmCallCollector.snapshot(),
+  ),
+);
+
+const persistedTelemetry = await telemetryStore.save(telemetry);
+
+console.log(`\n📈 Run telemetry: ${persistedTelemetry.path}`);
 
 console.log("\n========================================");
 

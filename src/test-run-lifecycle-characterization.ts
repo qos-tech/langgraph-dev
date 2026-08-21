@@ -29,9 +29,10 @@ const [
 // Current executable lifecycle starts in index.ts and invokes the compiled graph.
 assert.match(
   entrypoint,
-  /import\s+\{\s*devGraph\s*\}\s+from\s+["']\.\/graph\.js["']/,
+  /import\s+\{\s*buildDevGraph\s*\}\s+from\s+["']\.\/graph\.js["']/,
 );
-assert.match(entrypoint, /await\s+devGraph\.invoke\(\{/);
+assert.match(entrypoint, /const graph = buildDevGraph\(llmCallCollector\)/);
+assert.match(entrypoint, /await\s+graph\.invoke\(\{/);
 
 // Task/repository identity already exists at run start.
 assert.match(entrypoint, /\btask,\s*\n\s*repositoryPath,/);
@@ -105,12 +106,22 @@ assert.match(nodes, /Object\.keys\(state\.fileContents\)\.length/);
 // The public graph boundary remains the runtime entry used by index.ts.
 assert.match(graphBoundary, /export const devGraph = buildDevGraph\(\)/);
 
-// H0 starts from zero run telemetry infrastructure. This step must characterize
-// that fact instead of silently introducing persistence or timing behavior.
-assert.doesNotMatch(
-  entrypoint,
-  /\.runs|RunTelemetry|runId|startedAt|finishedAt|durationMs/,
-);
+// H0-001 Step 6 turns the characterized lifecycle into explicit application
+// composition without moving lifecycle state into graph nodes.
+for (const marker of [
+  "createLlmCallTelemetryCollector",
+  "createRunLifecycleRecorder",
+  "buildRunTelemetryCompletion",
+  "createJsonRunTelemetryStore",
+  "activeRun.complete",
+  "telemetryStore.save",
+] as const) {
+  assert.match(
+    entrypoint,
+    new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
+}
+
 assert.doesNotMatch(
   nodes,
   /\.runs|RunTelemetry|runId|startedAt|finishedAt|durationMs/,
@@ -121,5 +132,5 @@ assert.doesNotMatch(
 );
 
 console.log(
-  "✅ H0-001 Step 1 run lifecycle/telemetry input characterization passed.",
+  "✅ H0-001 lifecycle/telemetry characterization and Step 6 wiring passed.",
 );

@@ -121,6 +121,10 @@ function importsOf(module: string): string[] {
 
 assert.deepEqual(importsOf("index.ts"), [
   "./graph.js",
+  "./telemetry/completion.js",
+  "./telemetry/llm-calls.js",
+  "./telemetry/recorder.js",
+  "./telemetry/store.js",
 ]);
 
 assert.deepEqual(importsOf("graph.ts"), [

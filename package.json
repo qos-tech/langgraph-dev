@@ -36,7 +36,8 @@
     "test:run-telemetry-contract": "tsx src/test-run-telemetry-contract.ts",
     "test:run-lifecycle-recorder": "tsx src/test-run-lifecycle-recorder.ts",
     "test:run-telemetry-store": "tsx src/test-run-telemetry-store.ts",
-    "test:llm-call-telemetry": "tsx src/test-llm-call-telemetry.ts"
+    "test:llm-call-telemetry": "tsx src/test-llm-call-telemetry.ts",
+    "test:run-telemetry-integration": "tsx src/test-run-telemetry-integration.ts"
   },
   "keywords": [],
   "author": "",

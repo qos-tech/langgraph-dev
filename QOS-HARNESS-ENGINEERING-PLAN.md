@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Step 5: Capture LLM Call Metrics`
-**Task status:** ✅ Accepted — Step 5
+**Current task:** `H0-002 — Benchmark Task Suite`
+**Task status:** ✅ H0-001 accepted
 
 ---
 
@@ -6177,7 +6177,7 @@ product evidence exposes a concrete defect.
 ## H0-001 — Run Telemetry Foundation
 
 **Status:** 🚧 In progress
-**Current step:** Accepted — Step 5
+**Current step:** H0-001 complete
 **Release baseline:** `v0.1.0-alpha.4`
 
 ## Milestone objective
@@ -7781,4 +7781,305 @@ and prove that a real Harness run writes one `.runs/<run-id>.json` record with
 terminal status, attempts, file metrics, and captured LLM calls.
 
 **Decision:** proceed to Step 6 — Telemetry Acceptance / H0-001 Review.
+
+## H0-001 Step 6 — Telemetry Acceptance / H0-001 Review
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Compose the telemetry boundaries accepted in Steps 2–5 at the executable
+application edge so a normal Harness execution persists one terminal run record.
+
+The runtime composition becomes:
+
+```text
+RunLifecycleRecorder
+  + LlmCallTelemetryCollector
+  + buildDevGraph(collector)
+  + graph.invoke(...)
+  + buildRunTelemetryCompletion(...)
+  + RunTelemetryStore
+  → .runs/<run-id>.json
+```
+
+### Architectural decision
+
+Create `src/telemetry/completion.ts` as a small deterministic adapter from
+terminal `DevStateType` to the run-completion fields required by the recorder.
+
+It owns only state-to-telemetry projection: terminal status, attempt counters,
+files-read count, changed files, captured LLM calls, and `failureReason`.
+
+It does not own clock, run ID, graph invocation, filesystem persistence, or
+provider execution.
+
+### Executable wiring
+
+`src/index.ts` becomes the application composition point. It creates a
+run-scoped LLM collector, lifecycle recorder/active run, graph built with the
+collector, and telemetry store.
+
+After `graph.invoke(...)` returns a terminal state:
+
+```text
+state → buildRunTelemetryCompletion(...)
+      → activeRun.complete(...)
+      → store.save(...)
+```
+
+The persisted path is printed to the console.
+
+The exported static `devGraph` compatibility boundary remains available in
+`src/graph.ts`; the executable uses `buildDevGraph(...)` because telemetry must
+be run-scoped.
+
+### Terminal-state policy
+
+A persisted completion requires graph status `completed` or `failed`. Any
+non-terminal returned status is rejected deterministically. Terminal failures
+preserve `failureReason` when present.
+
+Provider/process exceptions that abort `graph.invoke(...)` before LangGraph
+returns a terminal state are not normalized in H0-001.
+
+### Files and attempts
+
+The final run record projects existing deterministic state:
+
+```text
+attempts.planning → state.planningAttempts
+attempts.review   → state.reviewAttempts
+attempts.task     → state.attempts
+
+files.read        → Object.keys(state.fileContents).length
+files.changed     → state.filesChanged
+```
+
+No new graph-state telemetry fields are introduced.
+
+### `.runs/` repository hygiene
+
+Now that the executable creates `process.cwd()/.runs`, add `.runs/` to
+`.gitignore`.
+
+### Deterministic acceptance test
+
+Create `src/test-run-telemetry-integration.ts`. It composes the accepted
+telemetry boundaries with deterministic clock/ID values and a temporary
+persistence root. It proves collector data, terminal state projection,
+lifecycle timing, persistence, completed/failed status, failure reason, and
+non-terminal rejection without calling a live model.
+
+### Step 1 characterization evolution
+
+Step 1 intentionally characterized the pre-telemetry executable. Step 6 updates
+that test to assert the accepted executable composition instead of asserting
+that `src/index.ts` contains no telemetry wiring. State/status/node observations
+remain protected.
+
+### Files
+
+Create:
+
+```text
+src/telemetry/completion.ts
+src/test-run-telemetry-integration.ts
+```
+
+Modify:
+
+```text
+src/index.ts
+src/test-run-lifecycle-characterization.ts
+.gitignore
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify `src/state.ts`, `src/providers/*`, existing telemetry contracts,
+recorder/store/LLM collector, or graph topology.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Manual smoke after deterministic gate
+
+With the normal environment configured:
+
+```bash
+npm run dev
+```
+
+must leave exactly one new `.runs/<run-id>.json` for the terminal run.
+
+Inspect with:
+
+```bash
+ls -lah .runs
+cat .runs/<run-id>.json
+git status --short
+```
+
+`.runs/` must not appear in Git status.
+
+### Acceptance criteria
+
+- [x] completion adapter exists and accepts only terminal graph state.
+- [x] completed/failed status, optional failure reason, attempts, files, and LLM
+  calls map deterministically.
+- [x] index creates a run-scoped collector and lifecycle recorder.
+- [x] index builds the graph with the collector.
+- [x] index persists one terminal telemetry record and prints its path.
+- [x] `.runs/` is ignored by Git.
+- [x] deterministic integration test uses a temporary store root.
+- [x] no graph-state telemetry fields are added.
+- [x] no provider contract/adapter changes occur.
+- [x] graph topology remains unchanged.
+- [x] Steps 1–5 telemetry gates remain green.
+- [x] complete H-ARCH/alpha.4 deterministic regression gate remains green.
+- [x] manual Harness smoke creates one real `.runs/<run-id>.json`.
+- [x] `.runs/` remains absent from `git status --short`.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(telemetry): wire run telemetry lifecycle"
+```
+
+### Exit condition
+
+H0-001 is complete when a normal terminal Harness run emits one ignored,
+versioned `.runs/<run-id>.json` record containing lifecycle, attempts, files,
+terminal result, and successful portable LLM-call metrics.
+
+**Next task:** H0-002 — Benchmark Task Suite.
+
+
+## H0-001 Step 6 Validation Record
+
+**Status:** ✅ Accepted — H0-001 complete
+
+The deterministic Step 6 gate passed and the manual executable smoke produced
+a real ignored run record.
+
+Observed smoke:
+
+```text
+runId:
+b8fbf6db-280c-4582-9f0b-30a321a02630
+
+finalStatus:
+failed
+
+planning attempts:
+4
+
+review attempts:
+3
+
+task attempts:
+0
+
+files read:
+5
+
+files changed:
+0
+
+LLM calls:
+7
+
+durationMs:
+50890
+```
+
+The persisted record contained:
+
+- `schemaVersion: 1`;
+- generated run identity and lifecycle timestamps;
+- the original task and target repository path;
+- terminal `failed` status;
+- attempt counters;
+- file-read/change metrics;
+- ordered planner/reviewer call telemetry;
+- selected models;
+- provider elapsed times;
+- prompt/completion/total token usage;
+- final lifecycle duration.
+
+The run failed because the planning-attempt budget was exhausted. This is a
+valid terminal Harness outcome and therefore a valid telemetry smoke for
+H0-001.
+
+`failureReason` was absent from the JSON because the returned terminal graph
+state had `failureReason: undefined`. H0-001 intentionally preserves that field
+when present and does not invent a reason when graph state does not provide one.
+
+### Repository hygiene evidence
+
+The generated file was written under:
+
+```text
+.runs/b8fbf6db-280c-4582-9f0b-30a321a02630.json
+```
+
+and `.runs/` did not appear in `git status --short`.
+
+Only expected Step 6 source/plan/test changes remained visible to Git.
+
+### H0-001 accepted architecture
+
+```text
+src/index.ts
+  → run-scoped LLM collector
+  → run lifecycle recorder
+  → graph built with collector
+  → terminal DevState projection
+  → completed RunTelemetry
+  → JSON telemetry store
+  → .runs/<run-id>.json
+```
+
+Telemetry remains outside `DevState`, provider-neutral, versioned, and
+persisted outside the target repository.
+
+### H0-001 exit decision
+
+All six H0-001 steps are accepted.
+
+**Decision:** close H0-001 — Run Telemetry Foundation and proceed to
+H0-002 — Benchmark Task Suite.
 
