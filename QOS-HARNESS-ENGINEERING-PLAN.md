@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002 — Benchmark Task Suite`
-**Task status:** ✅ H0-002 Step 3 accepted
+**Task status:** ✅ H0-002 Step 4 accepted
 
 ---
 
@@ -8182,7 +8182,7 @@ H0-002 — Benchmark Task Suite.
 ## Status
 
 **Task:** 🚧 In progress
-**Current step:** Accepted — Step 3
+**Current step:** Accepted — Step 4
 **Planned steps:** 5
 
 ## Objective
@@ -9248,3 +9248,324 @@ Accepted decisions:
 - no new runtime dependency was added.
 
 **Decision:** proceed to H0-002 Step 4 — Add Deterministic Benchmark Suite Validation.
+
+## H0-002 Step 4 — Add Deterministic Benchmark Suite Validation
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Promote the Step 1–3 benchmark assumptions into one reusable deterministic
+suite validator.
+
+The validator protects benchmark-definition integrity before H0-003 starts
+executing repositories and commands.
+
+Step 4 does not run a benchmark.
+
+### Architectural decision
+
+Create:
+
+```text
+src/benchmarks/suite-validation.ts
+```
+
+with:
+
+```ts
+validateBenchmarkSuite(...)
+assertValidBenchmarkSuite(...)
+```
+
+The validator consumes only `BenchmarkTask[]`.
+
+It must not:
+
+- resolve repositories;
+- inspect the filesystem;
+- invoke Git;
+- execute validation commands;
+- call an LLM;
+- read run telemetry;
+- calculate benchmark scores.
+
+### Fixed-suite invariants
+
+The current H0-002 benchmark suite is intentionally fixed.
+
+Step 4 therefore protects:
+
+```text
+exactly 5 cases
+ordered IDs B01 → B05
+exactly one benchmark per planned difficulty
+```
+
+Changing those invariants later must be an explicit benchmark-suite revision,
+not an accidental edit.
+
+### Repository identity invariants
+
+Every benchmark must have:
+
+```text
+non-empty repository.id
+non-empty repository.revision
+machine-independent repository.id
+unique repository.id + revision pair
+```
+
+The validator rejects obvious POSIX, UNC and Windows absolute-path shapes.
+
+It does not resolve whether a repository/revision actually exists.
+
+That belongs to H0-003.
+
+### Definition quality invariants
+
+Every benchmark must have non-empty:
+
+```text
+title
+task
+constraints[]
+successCriteria[]
+validationCommands[]
+```
+
+Entries inside the three arrays must not be blank.
+
+Duplicate entries inside an individual benchmark are rejected so suite data does
+not silently inflate or repeat requirements.
+
+### Schema invariant
+
+Every benchmark must use the currently supported:
+
+```text
+BENCHMARK_TASK_SCHEMA_VERSION
+```
+
+A future schema migration must be explicit.
+
+### Validation result
+
+`validateBenchmarkSuite(...)` returns all detected issues:
+
+```text
+valid
+issues[]
+```
+
+Each issue contains:
+
+```text
+code
+benchmarkId?
+detail
+```
+
+Validation does not short-circuit so the suite can be repaired from one
+deterministic report.
+
+`assertValidBenchmarkSuite(...)` is a convenience boundary for future H0-003
+startup checks.
+
+### What Step 4 deliberately does not validate
+
+Do not attempt to prove:
+
+- repository/revision existence;
+- command availability;
+- whether natural-language success criteria are executable;
+- whether validation commands fully prove each criterion;
+- allowed changed-file scope;
+- benchmark task difficulty correctness through heuristics;
+- semantic quality through an LLM.
+
+Those require execution evidence or human benchmark-design review.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/suite-validation.ts
+src/test-benchmark-suite-validation.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/acceptance.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/state.ts
+src/index.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- create repository fixtures;
+- resolve benchmark repositories/revisions;
+- run benchmark tasks;
+- execute validation commands;
+- inspect Git diffs;
+- enforce implementation file scope;
+- aggregate telemetry;
+- calculate SFCR/cost metrics;
+- compare models;
+- generate reports;
+- modify Harness runtime behavior.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-benchmark-suite-validation.ts
+```
+
+The test proves:
+
+- the accepted B01–B05 suite validates with zero issues;
+- duplicate benchmark IDs fail;
+- duplicate repository/revision assignments fail;
+- absolute repository IDs fail;
+- blank validation commands fail;
+- duplicate validation commands fail;
+- missing cases fail count/order/difficulty invariants;
+- assertion mode throws on an invalid suite.
+
+No filesystem fixture, Git command, provider, network call or benchmark
+execution is used.
+
+### Step 4 gate
+
+```bash
+npm run typecheck && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/suite-validation.ts` exists.
+- [x] accepted B01–B05 suite validates deterministically.
+- [x] fixed case count is protected.
+- [x] B01–B05 ordering is protected.
+- [x] duplicate case IDs are rejected.
+- [x] exactly one case per planned difficulty is protected.
+- [x] unsupported schema versions are rejected.
+- [x] blank core benchmark fields are rejected.
+- [x] absolute repository IDs are rejected.
+- [x] blank repository revisions are rejected.
+- [x] duplicate repository/revision assignments are rejected.
+- [x] empty/blank benchmark definition arrays are rejected.
+- [x] duplicate entries within benchmark definition arrays are rejected.
+- [x] validation reports all detected issues rather than only the first.
+- [x] assertion helper throws deterministic diagnostics for invalid suites.
+- [x] repository existence/checkout is not validated prematurely.
+- [x] validation commands are not executed.
+- [x] no LLM semantic validator is introduced.
+- [x] no graph/provider/telemetry runtime behavior changes.
+- [x] no new runtime dependency is added.
+- [x] Step 1–3 benchmark tests remain green.
+- [x] alpha.5 regression gate remains green.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): validate fixed benchmark suite"
+```
+
+### Exit condition
+
+Step 4 is complete when the fixed benchmark suite has one deterministic,
+reusable integrity gate and the full regression suite remains green.
+
+**Next:** Step 5 — H0-002 Acceptance / Review.
+
+## H0-002 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The deterministic benchmark suite validator and the complete alpha.5 regression
+gate passed in the development environment.
+
+Accepted suite integrity guarantees:
+
+```text
+exactly five benchmark cases
+ordered IDs B01 → B05
+unique benchmark IDs
+exactly one case per planned difficulty
+supported schema version only
+machine-independent repository IDs
+non-empty repository revisions
+unique repository ID + revision assignments
+non-empty benchmark core fields
+non-empty constraints/successCriteria/validationCommands
+no blank list entries
+no duplicate list entries
+```
+
+Accepted decisions:
+
+- `validateBenchmarkSuite(...)` reports all detected deterministic definition
+  issues rather than short-circuiting at the first failure;
+- `assertValidBenchmarkSuite(...)` provides a future H0-003 startup guard;
+- repository/revision existence is intentionally not checked in H0-002;
+- validation commands remain declarative and are not executed in H0-002;
+- natural-language benchmark semantics are not delegated to an LLM validator;
+- fixture resolution, checkout, Git isolation, command execution, diff capture,
+  telemetry aggregation, SFCR/cost calculation and model comparison remain
+  deferred;
+- no graph, provider, telemetry, state or executable runtime behavior changed;
+- no new runtime dependency was added.
+
+**Decision:** proceed to H0-002 Step 5 — Acceptance / Review.
