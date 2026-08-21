@@ -4,6 +4,8 @@ import { DevState } from "../state.js";
 
 import type { LlmRuntimeConfig } from "../providers/runtime-composition.js";
 
+import type { LlmCallTelemetrySink } from "../telemetry/llm-calls.js";
+
 import { createGraphNodes } from "./nodes.js";
 
 import {
@@ -13,7 +15,10 @@ import {
   reviewRouter,
 } from "./routers.js";
 
-export function buildDevGraph(llmRuntimeConfig: LlmRuntimeConfig) {
+export function buildDevGraph(
+  llmRuntimeConfig: LlmRuntimeConfig,
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
   const {
     analyzeNode,
     failedNode,
@@ -23,7 +28,7 @@ export function buildDevGraph(llmRuntimeConfig: LlmRuntimeConfig) {
     refineNode,
     reportNode,
     reviewPlanNode,
-  } = createGraphNodes(llmRuntimeConfig);
+  } = createGraphNodes(llmRuntimeConfig, llmCallTelemetrySink);
 
   return new StateGraph(DevState)
     .addNode("analyze", analyzeNode)

@@ -4,6 +4,11 @@ import type { LlmRuntimeConfig } from "../providers/runtime-composition.js";
 import { resolveLlmRoleRuntime } from "../providers/runtime-composition.js";
 import { executeStructuredLlm } from "../providers/execution.js";
 
+import {
+  captureStructuredLlmCall,
+  type LlmCallTelemetrySink,
+} from "../telemetry/llm-calls.js";
+
 import { inspectRepository } from "../repository/inspect.js";
 
 import { readFile } from "../repository/tools.js";
@@ -62,7 +67,10 @@ export const analyzeNode = async (
  * ============================================================
  */
 
-function createPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
+function createPlanNode(
+  llmRuntimeConfig: LlmRuntimeConfig,
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
@@ -80,6 +88,13 @@ function createPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
       prompt,
       validate: (value) => ExplorationSchema.parse(value),
     });
+
+    captureStructuredLlmCall(
+      llmCallTelemetrySink,
+      "planner",
+      binding.model,
+      result,
+    );
 
     const plan = normalizeRequests(state, result.data);
 
@@ -102,7 +117,10 @@ function createPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
  * ============================================================
  */
 
-function createReviewPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
+function createReviewPlanNode(
+  llmRuntimeConfig: LlmRuntimeConfig,
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
@@ -122,6 +140,13 @@ function createReviewPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
       prompt,
       validate: (value) => ReviewSchema.parse(value),
     });
+
+    captureStructuredLlmCall(
+      llmCallTelemetrySink,
+      "reviewer",
+      binding.model,
+      result,
+    );
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
 
@@ -229,7 +254,10 @@ export const readContextNode = async (
  * ============================================================
  */
 
-function createRefineNode(llmRuntimeConfig: LlmRuntimeConfig) {
+function createRefineNode(
+  llmRuntimeConfig: LlmRuntimeConfig,
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
   return async (
     state: DevStateType,
   ): Promise<Partial<DevStateType>> => {
@@ -243,6 +271,13 @@ function createRefineNode(llmRuntimeConfig: LlmRuntimeConfig) {
       prompt,
       validate: (value) => RefinedSchema.parse(value),
     });
+
+    captureStructuredLlmCall(
+      llmCallTelemetrySink,
+      "refiner",
+      binding.model,
+      result,
+    );
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
 
@@ -453,13 +488,19 @@ export const failedNode = async (
  * ============================================================
  */
 
-export function createGraphNodes(llmRuntimeConfig: LlmRuntimeConfig) {
+export function createGraphNodes(
+  llmRuntimeConfig: LlmRuntimeConfig,
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
   return {
     analyzeNode,
-    planNode: createPlanNode(llmRuntimeConfig),
-    reviewPlanNode: createReviewPlanNode(llmRuntimeConfig),
+    planNode: createPlanNode(llmRuntimeConfig, llmCallTelemetrySink),
+    reviewPlanNode: createReviewPlanNode(
+      llmRuntimeConfig,
+      llmCallTelemetrySink,
+    ),
     readContextNode,
-    refineNode: createRefineNode(llmRuntimeConfig),
+    refineNode: createRefineNode(llmRuntimeConfig, llmCallTelemetrySink),
     planGateNode,
     reportNode,
     failedNode,

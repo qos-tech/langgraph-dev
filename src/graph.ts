@@ -4,6 +4,8 @@ import { buildDevGraph as buildInjectedDevGraph } from "./graph/build-dev-graph.
 
 import { createGraphNodes } from "./graph/nodes.js";
 
+import type { LlmCallTelemetrySink } from "./telemetry/llm-calls.js";
+
 export {
   knownFileContext,
   listFiles,
@@ -41,8 +43,13 @@ export const {
   reviewPlanNode,
 } = defaultGraphNodes;
 
-export function buildDevGraph() {
-  return buildInjectedDevGraph(defaultLlmRuntimeConfig);
+export function buildDevGraph(
+  llmCallTelemetrySink?: LlmCallTelemetrySink,
+) {
+  return buildInjectedDevGraph(
+    defaultLlmRuntimeConfig,
+    llmCallTelemetrySink,
+  );
 }
 
 export const devGraph = buildDevGraph();

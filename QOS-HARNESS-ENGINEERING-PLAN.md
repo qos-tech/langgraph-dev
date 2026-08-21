@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Step 4: Persist Run Record`
-**Task status:** ✅ Accepted — Step 4
+**Current task:** `H0-001 — Step 5: Capture LLM Call Metrics`
+**Task status:** ✅ Accepted — Step 5
 
 ---
 
@@ -6177,7 +6177,7 @@ product evidence exposes a concrete defect.
 ## H0-001 — Run Telemetry Foundation
 
 **Status:** 🚧 In progress
-**Current step:** Accepted — Step 4
+**Current step:** Accepted — Step 5
 **Release baseline:** `v0.1.0-alpha.4`
 
 ## Milestone objective
@@ -7404,4 +7404,381 @@ lifecycle recorder
 at the executable/application boundary.
 
 **Decision:** proceed to Step 5 — Capture LLM Call Metrics.
+
+## H0-001 Step 5 — Capture LLM Call Metrics
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Capture portable metrics for successful planner, reviewer, and refiner LLM
+calls without putting telemetry into `DevState` and without coupling telemetry
+to a concrete provider.
+
+Step 5 instruments the graph's existing portable LLM execution path.
+
+It does not persist the collected metrics or wire the executable Harness
+lifecycle yet.
+
+### Evidence
+
+The provider-neutral structured result already exposes:
+
+```text
+elapsedSeconds
+usage.promptTokens?
+usage.completionTokens?
+usage.totalTokens?
+```
+
+Runtime composition already exposes the semantic role and selected model:
+
+```text
+planner
+reviewer
+refiner
+model
+```
+
+The Step 2 telemetry contract already reserves:
+
+```text
+llmCalls[]
+```
+
+for exactly these portable values.
+
+### Architectural decision
+
+Create:
+
+```text
+src/telemetry/llm-calls.ts
+```
+
+with:
+
+```ts
+LlmCallTelemetrySink
+LlmCallTelemetryCollector
+createLlmCallTelemetryCollector(...)
+captureStructuredLlmCall(...)
+```
+
+The collector is in-memory and run-scoped.
+
+It owns no filesystem persistence and no graph state.
+
+### Graph injection
+
+`createGraphNodes(...)` gains an optional telemetry sink:
+
+```ts
+createGraphNodes(
+  llmRuntimeConfig,
+  llmCallTelemetrySink?,
+)
+```
+
+Planner, reviewer, and refiner record the result only after
+`executeStructuredLlm(...)` returns successfully.
+
+The graph builder receives the same optional sink and forwards it to the node
+factory.
+
+The public `buildDevGraph(...)` compatibility wrapper also accepts the optional
+sink while preserving its current no-argument behavior.
+
+Therefore:
+
+```text
+existing callers
+  → no telemetry sink
+  → behavior unchanged
+
+final H0-001 wiring
+  → run-scoped collector
+  → buildDevGraph(collector)
+  → collected llmCalls[]
+```
+
+### Successful-call scope
+
+Step 5 records **successful provider calls only**.
+
+Reason:
+
+When `executeStructuredLlm(...)` throws, the current portable contract does not
+guarantee:
+
+```text
+elapsedSeconds
+normalized failure type
+portable token usage
+```
+
+Inventing those values in telemetry would make benchmark data misleading.
+
+Failure-call telemetry requires a future normalized execution-error/result
+contract and is not added implicitly here.
+
+### Provider neutrality
+
+The capture helper consumes:
+
+```text
+StructuredLlmResult<T>
+role
+model
+```
+
+It must not inspect:
+
+```text
+NVIDIA response shapes
+Claude CLI output
+provider hints
+provider capabilities
+HTTP/process details
+```
+
+Provider usage remains optional because the provider contract already makes
+usage optional.
+
+### Collector behavior
+
+`createLlmCallTelemetryCollector()`:
+
+- preserves call order;
+- records one entry per successful LLM call;
+- exposes `snapshot()` as a copied array;
+- never exposes its internal mutable array.
+
+No aggregation or cost calculation occurs yet.
+
+H0 comparison/report work can aggregate raw call records later.
+
+### Files
+
+Create:
+
+```text
+src/telemetry/llm-calls.ts
+src/test-llm-call-telemetry.ts
+```
+
+Modify:
+
+```text
+src/graph/nodes.ts
+src/graph/build-dev-graph.ts
+src/graph.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/state.ts
+src/index.ts
+src/providers/*
+src/telemetry/contracts.ts
+src/telemetry/recorder.ts
+src/telemetry/store.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- persist LLM metrics;
+- wire a collector in `src/index.ts`;
+- automatically create `.runs/`;
+- record failed provider calls with invented metrics;
+- add normalized provider error telemetry;
+- calculate cost;
+- aggregate tokens;
+- add node timings;
+- add prompt contents to telemetry;
+- add provider-specific telemetry fields;
+- mutate `DevState`;
+- add a database/dashboard;
+- add OpenTelemetry.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-llm-call-telemetry.ts
+```
+
+with a capability-aware fake provider.
+
+It must prove:
+
+- planner calls capture planner role/model/time/usage;
+- reviewer calls capture reviewer role/model/time with usage absent when the
+  provider omits it;
+- refiner calls capture refiner role/model/time/partial portable usage;
+- graph nodes use the injected collector;
+- call order is preserved;
+- the capture helper is a no-op when no sink is configured;
+- snapshots do not expose the collector's internal mutable array;
+- no real provider usage occurs;
+- no filesystem persistence occurs.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/telemetry/llm-calls.ts` exists.
+- [x] a provider-neutral LLM telemetry sink exists.
+- [x] an in-memory run-scoped collector exists.
+- [x] planner successful calls are captured.
+- [x] reviewer successful calls are captured.
+- [x] refiner successful calls are captured.
+- [x] selected model is captured from resolved runtime composition.
+- [x] elapsed provider time is captured.
+- [x] prompt/completion/total usage remains optional.
+- [x] call order is preserved.
+- [x] collector snapshots do not expose the internal array.
+- [x] graph node factory accepts an optional telemetry sink.
+- [x] graph builder forwards an optional telemetry sink.
+- [x] public graph builder remains compatible with no-argument callers.
+- [x] graph state remains unchanged.
+- [x] provider adapters/contracts remain unchanged.
+- [x] failed calls are not assigned invented portable metrics.
+- [x] no persistence/executable wiring is introduced yet.
+- [x] no new dependency is added.
+- [x] Steps 1–4 telemetry gates remain green.
+- [x] complete H-ARCH/alpha.4 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "feat(telemetry): capture LLM call metrics"
+```
+
+### Exit condition
+
+Step 5 is complete when successful planner/reviewer/refiner calls can be
+captured into the Step 2 portable telemetry shape through an optional run-scoped
+collector, without graph-state, concrete-provider, or persistence coupling.
+
+**Next:** Step 6 — Telemetry Acceptance / H0-001 Review.
+
+
+## H0-001 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic H0-001 Step 5 gate passed on the
+`v0.1.0-alpha.4` architectural-foundation baseline.
+
+Accepted outcome:
+
+- `src/telemetry/llm-calls.ts` defines a provider-neutral LLM telemetry sink
+  and in-memory collector;
+- successful planner, reviewer, and refiner calls capture semantic role,
+  selected model, provider elapsed time, and optional portable token usage;
+- call order is preserved;
+- collector snapshots do not expose the collector's internal mutable array;
+- graph node creation accepts an optional telemetry sink;
+- graph assembly forwards the optional sink without changing no-telemetry
+  behavior;
+- the public graph builder remains compatible with existing no-argument
+  callers;
+- no telemetry fields were added to `DevState`;
+- no concrete provider adapter or provider contract was changed;
+- failed provider calls are not assigned invented portable metrics;
+- no filesystem persistence or executable lifecycle wiring was introduced in
+  Step 5;
+- no new dependency was added.
+
+### Regression adjustments accepted during validation
+
+Step 5 legitimately extended the graph-builder/node-factory dependency surface.
+
+The deterministic architecture guards were updated to reflect that explicit
+telemetry dependency while preserving the underlying architecture rules:
+
+- `test-harch004-acceptance.ts` now expects the optional telemetry sink;
+- `test-architecture-boundaries-characterization.ts` now characterizes the
+  telemetry import in the graph boundary/builder/nodes;
+- `test-provider-architecture.ts` now expects the optional telemetry sink;
+- duplicate type/value imports from `telemetry/llm-calls` in `nodes.ts` were
+  consolidated into one import;
+- the Step 5 test fixture was corrected to provide all required `DevStateType`
+  keys explicitly.
+
+These corrections do not weaken the dependency rules. They update frozen
+characterization/acceptance expectations to the new explicit, provider-neutral
+telemetry boundary.
+
+### Gate evidence
+
+The complete deterministic regression sequence reached and passed:
+
+```text
+typecheck
+H0-001 Step 5 LLM telemetry
+H0-001 Steps 1-4 telemetry
+H-ARCH-004 acceptance/public/dependency/boundary guards
+H-ARCH-003 acceptance/execution policy/provider lifecycle
+provider architecture/cross-provider/composition/injection/contract
+H-ARCH-001 prompt/graph characterization
+repository tools
+```
+
+### Design consequence
+
+Step 6 should be an integration/acceptance step, not another telemetry
+abstraction step.
+
+It should compose the already-accepted boundaries at the executable
+application edge:
+
+```text
+run lifecycle recorder
+  + run-scoped LLM collector
+  + graph execution result
+  + run telemetry store
+```
+
+and prove that a real Harness run writes one `.runs/<run-id>.json` record with
+terminal status, attempts, file metrics, and captured LLM calls.
+
+**Decision:** proceed to Step 6 — Telemetry Acceptance / H0-001 Review.
 

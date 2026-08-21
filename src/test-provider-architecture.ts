@@ -44,8 +44,14 @@ for (const [name, content] of [
 }
 
 // The graph builder must require injected role bindings.
-assert.match(builder, /buildDevGraph\(llmRuntimeConfig: LlmRuntimeConfig\)/);
-assert.match(builder, /createGraphNodes\(llmRuntimeConfig\)/);
+assert.match(
+  builder,
+  /buildDevGraph\(\s*llmRuntimeConfig: LlmRuntimeConfig,\s*llmCallTelemetrySink\?: LlmCallTelemetrySink,\s*\)/,
+);
+assert.match(
+  builder,
+  /createGraphNodes\(llmRuntimeConfig,\s*llmCallTelemetrySink\)/,
+);
 
 // Nodes resolve runtime roles and delegate provider invocation through the
 // portable execution boundary rather than calling adapters directly.

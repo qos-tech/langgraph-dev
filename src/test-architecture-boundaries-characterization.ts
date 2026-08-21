@@ -127,6 +127,7 @@ assert.deepEqual(importsOf("graph.ts"), [
   "./providers/default-composition.js",
   "./graph/build-dev-graph.js",
   "./graph/nodes.js",
+  "./telemetry/llm-calls.js",
   "./graph/context.js",
   "./graph/prompts.js",
   "./graph/routers.js",
@@ -138,6 +139,7 @@ assert.deepEqual(importsOf("graph/build-dev-graph.ts"), [
   "@langchain/langgraph",
   "../state.js",
   "../providers/runtime-composition.js",
+  "../telemetry/llm-calls.js",
   "./nodes.js",
   "./routers.js",
 ]);
@@ -147,6 +149,7 @@ assert.deepEqual(importsOf("graph/nodes.ts"), [
   "../providers/runtime-composition.js",
   "../providers/runtime-composition.js",
   "../providers/execution.js",
+  "../telemetry/llm-calls.js",
   "../repository/inspect.js",
   "../repository/tools.js",
   "./schemas.js",

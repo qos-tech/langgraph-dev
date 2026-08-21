@@ -92,8 +92,14 @@ assert.doesNotMatch(
   /providers\/(?:nvidia|claude-cli)/,
 );
 
-assert.match(builder, /buildDevGraph\(llmRuntimeConfig: LlmRuntimeConfig\)/);
-assert.match(builder, /createGraphNodes\(llmRuntimeConfig\)/);
+assert.match(
+  builder,
+  /buildDevGraph\(\s*llmRuntimeConfig: LlmRuntimeConfig,\s*llmCallTelemetrySink\?: LlmCallTelemetrySink,\s*\)/,
+);
+assert.match(
+  builder,
+  /createGraphNodes\(llmRuntimeConfig,\s*llmCallTelemetrySink\)/,
+);
 assert.doesNotMatch(builder, /default-composition|providers\/(?:nvidia|claude-cli)/);
 
 assert.match(nodes, /resolveLlmRoleRuntime/);
