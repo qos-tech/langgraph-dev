@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-002 — Benchmark Task Suite`
-**Task status:** ✅ H0-002 Step 4 accepted
+**Current task:** `H0-003 — Benchmark Runner`
+**Task status:** ✅ H0-002 accepted
 
 ---
 
@@ -8182,7 +8182,7 @@ H0-002 — Benchmark Task Suite.
 ## Status
 
 **Task:** 🚧 In progress
-**Current step:** Accepted — Step 4
+**Current step:** H0-002 complete
 **Planned steps:** 5
 
 ## Objective
@@ -9569,3 +9569,321 @@ Accepted decisions:
 - no new runtime dependency was added.
 
 **Decision:** proceed to H0-002 Step 5 — Acceptance / Review.
+
+## H0-002 Step 5 — Acceptance / Review
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Close H0-002 by proving that the benchmark contract, fixed B01–B05 suite,
+deterministic acceptance rules, and suite-integrity validator work together as
+one coherent benchmark-definition foundation.
+
+This is an acceptance/review step.
+
+No benchmark runner, repository resolver, checkout behavior, telemetry
+aggregation, scoring, or model comparison is added.
+
+### Final H0-002 architecture
+
+```text
+BenchmarkTask contract
+        ↓
+fixed B01–B05 cases
+        ↓
+suite-validation
+        ↓
+future H0-003 execution
+        ↓
+BenchmarkRunObservation
+        ↓
+acceptance rules
+        ↓
+PASS / FAIL + deterministic failure reasons
+```
+
+### Review findings
+
+#### 1. Benchmark identity is reproducible at the definition boundary
+
+Every benchmark carries:
+
+```text
+repository.id
+repository.revision
+```
+
+No case depends on a machine-local absolute path.
+
+H0-003 must resolve those identifiers into isolated reproducible working trees.
+
+#### 2. Suite shape is fixed and explicit
+
+The accepted suite is:
+
+```text
+B01 — Trivial
+B02 — Already Satisfied
+B03 — Localized Change
+B04 — Cross-file Feature
+B05 — Architectural / Ambiguous
+```
+
+The suite validator protects case count, order, difficulty distribution,
+schema version, repository identity and definition quality.
+
+#### 3. Acceptance is deterministic where evidence is currently available
+
+Current deterministic failure reasons are:
+
+```text
+unexpected_outcome
+unexpected_changes
+validation_failed
+human_intervention_required
+```
+
+This is intentionally narrower than the eventual SFCR definition because H0-002
+does not yet execute Git scope checks, builds, tests, or benchmark-specific
+validators.
+
+H0-003 will produce those observations.
+
+#### 4. `blocked` can be a correct benchmark result
+
+B05 intentionally expects:
+
+```text
+blocked
+```
+
+for revision `b05-v1`.
+
+This protects evidence-driven restraint and prevents the benchmark from
+rewarding unsupported architectural changes.
+
+#### 5. Natural-language success criteria remain specification, not fake automation
+
+`successCriteria[]` are preserved as benchmark intent.
+
+H0-002 does not pretend that generic code can deterministically interpret
+arbitrary prose.
+
+Executable proof must come from concrete validation commands, repository
+observations, or later benchmark-specific validators.
+
+### Acceptance test
+
+Create:
+
+```text
+src/test-h0-002-acceptance.ts
+```
+
+The test composes the existing H0-002 modules and proves:
+
+- the real B01–B05 suite passes suite validation;
+- expected outcomes remain fixed;
+- a matching deterministic observation can pass for every benchmark;
+- B02 still rejects unnecessary file changes;
+- B05 still accepts a correct blocked outcome;
+- no new execution layer is required to validate the definition foundation.
+
+### Files
+
+Create:
+
+```text
+src/test-h0-002-acceptance.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/acceptance.ts
+src/benchmarks/suite-validation.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/state.ts
+src/index.ts
+```
+
+### Non-goals
+
+Do not:
+
+- create benchmark repository fixtures in this step;
+- resolve repository IDs/revisions;
+- clone or checkout repositories;
+- execute benchmark tasks;
+- execute validation commands;
+- inspect Git diffs;
+- calculate SFCR or cost;
+- aggregate telemetry;
+- compare models;
+- generate comparison reports;
+- change Harness runtime behavior.
+
+### Final H0-002 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] final H0-002 acceptance test exists.
+- [x] real B01–B05 suite passes deterministic suite validation.
+- [x] fixed expected outcomes remain protected.
+- [x] matching deterministic observations can pass for all five cases.
+- [x] B02 still rejects unnecessary changes.
+- [x] B05 still accepts correct evidence-driven blocking.
+- [x] benchmark contract remains versioned.
+- [x] suite identity remains machine-independent.
+- [x] no benchmark runner is introduced.
+- [x] no repository resolver/checkout behavior is introduced.
+- [x] no telemetry aggregation/scoring/reporting behavior is introduced.
+- [x] no graph/provider/telemetry runtime behavior changes.
+- [x] no new runtime dependency is added.
+- [x] all Step 1–4 benchmark tests remain green.
+- [x] complete alpha.5 regression gate remains green.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "test(benchmark): close fixed benchmark suite"
+```
+
+### Exit condition
+
+Step 5 is complete when the final acceptance test and complete regression gate
+pass.
+
+At that point:
+
+```text
+H0-002 — Benchmark Task Suite ✅ COMPLETE
+Next — H0-003 Benchmark Runner
+```
+
+## H0-002 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+The final H0-002 acceptance test and the complete deterministic alpha.5
+regression gate passed in the development environment.
+
+Accepted benchmark-definition foundation:
+
+```text
+BenchmarkTask contract
+        ↓
+fixed B01–B05 suite
+        ↓
+deterministic suite validation
+        ↓
+future H0-003 execution observations
+        ↓
+deterministic benchmark acceptance
+```
+
+Final suite:
+
+```text
+B01 — Trivial
+  expected: changes_required
+
+B02 — Already Satisfied
+  expected: already_satisfied
+
+B03 — Localized Change
+  expected: changes_required
+
+B04 — Cross-file Feature
+  expected: changes_required
+
+B05 — Architectural / Ambiguous
+  expected: blocked
+```
+
+Verified outcomes:
+
+- the real B01–B05 suite passes deterministic integrity validation;
+- expected outcomes remain fixed and explicit;
+- matching deterministic observations can be accepted for all five cases;
+- B02 rejects unnecessary file changes;
+- B05 accepts correct evidence-driven blocking;
+- benchmark definitions remain versioned and machine-independent;
+- repository resolution, checkout/isolation, validation-command execution,
+  Git-diff capture, telemetry aggregation, SFCR/cost calculation, model
+  comparison and reporting remain outside H0-002;
+- no graph, provider, telemetry, state or executable runtime behavior changed;
+- no new runtime dependency was added.
+
+### H0-002 conclusion
+
+```text
+H0-002 — Benchmark Task Suite ✅ COMPLETE
+```
+
+### Release decision
+
+H0-002 adds a complete benchmark-definition capability on top of the alpha.5
+telemetry baseline.
+
+Prepare the next release as:
+
+```text
+v0.1.0-alpha.6 — Benchmark Suite Alpha
+```
+
+Version/tag publication remains a separate release commit after this accepted
+Step 5 commit.
+
+**Decision:** proceed next to `H0-003 — Benchmark Runner` only after the Step 5
+commit and alpha.6 release are complete.
