@@ -5228,26 +5228,53 @@ Semantic decomposition remains a later planning concern.
 
 ## Application execution boundary
 
-H0-002A must introduce a small application API:
-
-```ts
-runHarness(task)
-```
-
-Expected module direction:
+H0-002A must introduce a small application API in:
 
 ```text
 src/app/run-harness.ts
 ```
 
-The exact signature is finalized from Step 1 evidence.
+Step 1-3 evidence shows that the application boundary cannot be only:
 
-Its responsibility is to execute one already-normalized Harness task.
+```ts
+runHarness(task)
+```
+
+because `NormalizedHarnessTask` intentionally contains machine-independent
+repository identity while actual execution requires a concrete local workspace.
+
+The target direction is therefore:
+
+```ts
+type ResolvedWorkspace = Readonly<{
+  repositoryPath: string;
+}>;
+
+type HarnessExecutionOptions = Readonly<{
+  maxPlanningAttempts?: number;
+}>;
+
+type RunHarnessRequest = Readonly<{
+  task: NormalizedHarnessTask;
+  workspace: ResolvedWorkspace;
+  execution?: HarnessExecutionOptions;
+}>;
+
+runHarness(request, dependencies?)
+```
+
+The exact exported names may be refined from implementation evidence, but these
+boundaries are now architectural requirements.
+
+Its responsibility is to execute one already-normalized Harness task against one
+already-resolved workspace.
 
 Expected ownership:
 
 ```text
 receive NormalizedHarnessTask
+receive resolved local workspace
+receive optional execution policy
 compose/inject runtime dependencies required for one run
 start lifecycle / telemetry
 invoke graph/core execution
@@ -5267,6 +5294,48 @@ clone/checkout repositories
 resolve repository.id to a local working tree
 invent task requirements
 ```
+
+### Resolved workspace is not task identity
+
+These concepts remain separate:
+
+```text
+NormalizedHarnessTask.repository
+  → repository identity
+  → id + revision?
+
+ResolvedWorkspace
+  → concrete execution location
+  → repositoryPath
+```
+
+`repositoryPath` must not be copied into the normalized task merely to satisfy
+runtime execution.
+
+### Dependency injection direction
+
+Step 4 should support deterministic tests without real provider calls or `.runs`
+writes.
+
+Preferred shape:
+
+```text
+runHarness(request, dependencies?)
+```
+
+where production defaults still use the real:
+
+```text
+buildDevGraph
+createLlmCallTelemetryCollector
+createRunLifecycleRecorder
+createJsonRunTelemetryStore
+```
+
+and tests may inject deterministic doubles.
+
+Dependency injection is for application-boundary testability only. It must not
+move provider/model selection into `NormalizedHarnessTask`.
 
 ### Why `runHarness(task)` belongs before H0-003
 
@@ -5291,8 +5360,14 @@ H0-003 should invoke the same application boundary as real tasks:
 BenchmarkTask
     ↓ adapter
 NormalizedHarnessTask
+
+repository.id + revision
+    ↓ H0-003 workspace resolver
+ResolvedWorkspace
+
+NormalizedHarnessTask + ResolvedWorkspace
     ↓
-runHarness(task)
+runHarness(...)
 ```
 
 ## First delivery surface
@@ -5333,14 +5408,18 @@ services, not a second Harness execution path.
    - deterministic errors;
    - no workspace resolution.
 
-4. **Extract Application `runHarness(task)`**
-   - move one-run application orchestration out of the executable entry point;
+4. **Extract Application Execution Boundary**
+   - introduce `runHarness({ task, workspace, execution? }, dependencies?)`;
+   - keep normalized task identity separate from resolved local workspace;
    - preserve telemetry lifecycle and graph behavior;
    - return an explicit application result;
-   - no CLI parsing inside application execution.
+   - support deterministic dependency injection for tests;
+   - do not migrate `src/index.ts` yet.
 
 5. **Introduce CLI / Manual Intake Adapter**
-   - translate existing local invocation into raw intake → normalize → runHarness;
+   - define how executable/manual input obtains repository identity;
+   - translate raw intake → normalize → resolved workspace → runHarness;
+   - remove the duplicated one-run orchestration from `src/index.ts`;
    - preserve current executable behavior;
    - keep external integration concerns outside the core.
 
@@ -5361,11 +5440,11 @@ H0-002A is complete only when:
 - [ ] constraints and acceptance criteria are explicit structured fields.
 - [ ] deterministic normalization rejects malformed/blank task data.
 - [ ] normalization does not call an LLM.
-- [ ] `runHarness(task)` exists as the application execution boundary.
-- [ ] application execution receives an already-normalized task.
+- [ ] `runHarness(...)` exists as the application execution boundary.
+- [ ] application execution receives an already-normalized task and an explicit resolved workspace.
 - [ ] application execution owns one-run graph/telemetry orchestration.
 - [ ] application execution does not parse CLI/GitHub/Q-Flow/API input.
-- [ ] CLI/manual intake maps into normalized task → `runHarness(task)`.
+- [ ] CLI/manual intake maps into normalized task + resolved workspace → `runHarness(...)`.
 - [ ] Harness core does not branch on GitHub, Q-Flow, HTTP, CLI, or benchmark
       source concepts.
 - [ ] no API server is added prematurely.
@@ -5425,10 +5504,16 @@ BenchmarkTask
 benchmark adapter
     ↓
 NormalizedHarnessTask
+
+repository.id + revision
     ↓
 workspace resolution / isolated execution context
     ↓
-runHarness(task)
+ResolvedWorkspace
+
+NormalizedHarnessTask + ResolvedWorkspace
+    ↓
+runHarness(...)
 ```
 
 The exact relationship between normalized repository identity and resolved
@@ -11698,3 +11783,129 @@ Step 4 must not yet make CLI/manual intake use the new normalizer. That adapter
 migration remains Step 5.
 
 **Decision:** proceed to H0-002A Step 4 — Extract Application `runHarness(task)`.
+
+## H0-002A Architecture Refinement Before Step 4
+
+**Status:** ✅ Accepted design adjustment
+
+Step 1-3 evidence exposed a boundary mismatch in the earlier informal
+`runHarness(task)` wording.
+
+The normalized task contract correctly excludes machine-local paths:
+
+```text
+NormalizedHarnessTask.repository
+  → id
+  → revision?
+```
+
+while current execution requires:
+
+```text
+repositoryPath
+```
+
+Putting `repositoryPath` back into `NormalizedHarnessTask` would undo the
+machine-independent identity decision accepted in Step 2.
+
+### Accepted refinement
+
+Step 4 will therefore extract an application execution boundary shaped around
+two separate inputs:
+
+```text
+NormalizedHarnessTask
+  → what to do / repository identity
+
+ResolvedWorkspace
+  → where this run executes locally
+```
+
+with optional execution policy kept separate from both.
+
+Target direction:
+
+```ts
+runHarness({
+  task,
+  workspace,
+  execution?,
+}, dependencies?)
+```
+
+### Step 4 migration rule
+
+Step 4 creates and tests the new application boundary but does not yet migrate
+`src/index.ts`.
+
+This temporary duplication is intentional and limited to one step.
+
+Reason:
+
+The current executable only knows:
+
+```text
+TARGET_REPOSITORY
+```
+
+which is a concrete path.
+
+It does not yet have a correct machine-independent repository identity for
+constructing `NormalizedHarnessTask`.
+
+Inventing an identity such as:
+
+```text
+local
+basename(repositoryPath)
+repositoryPath copied into repository.id
+```
+
+would create a false domain model merely to complete the extraction in one
+commit.
+
+### Step 5 responsibility
+
+Step 5 will own the executable/manual adapter migration:
+
+```text
+raw executable input
+  ↓
+repository identity acquisition
+  ↓
+normalizeHarnessTask(...)
+  ↓
+resolved local workspace
+  ↓
+runHarness(...)
+```
+
+and only then remove the old one-run orchestration from `src/index.ts`.
+
+### Testing rule
+
+Step 4 should use dependency injection so application execution can be tested
+deterministically without:
+
+```text
+real LLM/provider calls
+real benchmark execution
+real `.runs` persistence
+```
+
+Production defaults must still compose the existing real graph, telemetry
+collector, lifecycle recorder, and telemetry store.
+
+### Non-goals added by this refinement
+
+Step 4 must not:
+
+- invent repository identity from a local path;
+- migrate the CLI/manual adapter early;
+- resolve repository identity into a worktree;
+- make `NormalizedHarnessTask` contain `repositoryPath`;
+- introduce benchmark-only execution behavior;
+- introduce a second permanent graph entry path.
+
+**Decision:** proceed with Step 4 only after this architecture refinement is
+committed to the engineering plan.
