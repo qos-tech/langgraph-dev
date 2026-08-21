@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-004 — Step 2: Add Module Dependency / Cycle Guards`
-**Task status:** ✅ Accepted — Step 2
+**Current task:** `H-ARCH-004 — Step 3: Protect Composition and Public Boundaries`
+**Task status:** ✅ Accepted — Step 3
 
 ---
 
@@ -5142,7 +5142,7 @@ After publication, development continues with:
 ## Status
 
 **Milestone:** 🚧 In progress
-**Current step:** Accepted — Step 2
+**Current step:** Accepted — Step 3
 **Release baseline:** `v0.1.0-alpha.3`
 
 ## Milestone objective
@@ -5663,4 +5663,244 @@ The Step 2 rule set intentionally remains small and evidence-backed rather than
 turning the current folder structure into a speculative global layering system.
 
 **Decision:** proceed to Step 3 — Protect Composition and Public Boundaries.
+
+## H-ARCH-004 Step 3 — Protect Composition and Public Boundaries
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Protect the repository's current public API and runtime-composition boundaries
+so later work cannot silently move concrete provider selection or graph
+construction into the wrong layer.
+
+This remains test-only architectural hardening.
+
+No production source changes are planned.
+
+### Evidence from Steps 1–2
+
+Steps 1 and 2 established and generalized the internal dependency direction.
+
+Step 3 focuses on the outer edges of that architecture:
+
+```text
+index.ts
+  → graph.ts
+
+graph.ts
+  → default-composition
+  → graph builder / node factory
+
+default-composition
+  → concrete provider selection
+
+graph builder / nodes
+  → injected neutral runtime config
+
+provider runtime core
+  → provider-neutral contracts only
+```
+
+### Public/composition boundary rules
+
+#### Rule 1 — executable entry point goes through `graph.ts`
+
+`src/index.ts` must continue to import the public graph boundary.
+
+It must not:
+
+- select NVIDIA/Claude/default composition directly;
+- construct the graph directly;
+- instantiate graph nodes directly.
+
+This preserves one outer runtime entry point.
+
+#### Rule 2 — `graph.ts` remains the compatibility/default-composition boundary
+
+`src/graph.ts` may know:
+
+- `default-composition`;
+- graph builder;
+- graph node factory;
+- graph helper modules for compatibility exports.
+
+It must not directly import concrete provider adapters.
+
+#### Rule 3 — current compatibility exports remain stable
+
+Step 3 freezes the current compatibility surface exposed by `graph.ts`,
+including:
+
+- context helpers;
+- prompt builders;
+- routers;
+- graph node factory/default nodes;
+- injected graph builder alias;
+- default `buildDevGraph()`;
+- compiled `devGraph`.
+
+This is not a permanent promise that every export must exist forever.
+
+It is a regression guard while H-ARCH completes.
+
+Any future removal should be an explicit compatibility-breaking task.
+
+#### Rule 4 — concrete provider selection stays in default composition
+
+`providers/default-composition.ts` is the deliberate concrete composition root.
+
+It may import the default NVIDIA adapter.
+
+It must not depend on graph internals.
+
+#### Rule 5 — injectable graph core does not select default composition
+
+`graph/build-dev-graph.ts` and `graph/nodes.ts` remain reusable with explicit
+`LlmRuntimeConfig`.
+
+They must not import `providers/default-composition.ts`.
+
+#### Rule 6 — provider runtime core does not depend outward on graph/public composition
+
+These modules:
+
+```text
+providers/contracts.ts
+providers/runtime-composition.ts
+providers/execution.ts
+providers/role-composition.ts
+```
+
+must not depend on `graph.ts`, graph internals, or default concrete composition.
+
+### Why Step 3 uses focused source guards
+
+Step 2 already owns generalized dependency/cycle analysis.
+
+Step 3 intentionally does not build a second dependency framework.
+
+It protects public/composition semantics that are clearer as focused assertions:
+
+- which module is the executable boundary;
+- which module may select concrete defaults;
+- which compatibility exports are currently supported.
+
+### Files
+
+Create:
+
+```text
+src/test-architecture-public-boundaries.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Non-goals
+
+Do not:
+
+- redesign the public API;
+- remove compatibility exports;
+- remove `role-composition.ts`;
+- move default composition into a new app layer;
+- rename graph modules;
+- introduce a provider registry;
+- change the default provider;
+- reorganize folders;
+- change runtime behavior;
+- add Repository Intelligence;
+- add Context Engine;
+- add telemetry;
+- add implementation/fix agents.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] executable entry point is protected behind `graph.ts`.
+- [x] entry point cannot select concrete providers/default composition directly.
+- [x] `graph.ts` remains the current outer compatibility/composition boundary.
+- [x] `graph.ts` does not directly import concrete provider adapters.
+- [x] current graph compatibility exports are protected.
+- [x] default composition remains the concrete provider-selection root.
+- [x] default composition does not depend on graph internals.
+- [x] graph builder remains independent from default composition.
+- [x] graph nodes remain independent from default composition.
+- [x] provider runtime core cannot depend outward on graph/public composition.
+- [x] role-composition remains a neutral compatibility forwarding layer.
+- [x] Step 2 dependency/cycle guards remain green.
+- [x] no production source changes.
+- [x] no new dependency is added.
+- [x] full alpha.3 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "test(architecture): protect public composition boundaries"
+```
+
+### Exit condition
+
+Step 3 is complete when the public/runtime composition boundaries are guarded
+deterministically and the full regression gate passes.
+
+**Next:** Step 4 — Final Architecture Acceptance.
+
+
+## H-ARCH-004 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 3 gate passed in the development environment.
+
+Accepted outcome:
+
+- the executable entry point remains behind `graph.ts`;
+- the entry point does not select concrete providers/default composition directly;
+- `graph.ts` remains the outer compatibility/default-composition boundary;
+- `graph.ts` does not import concrete provider adapters directly;
+- the current compatibility export surface is protected;
+- `default-composition.ts` remains the concrete provider-selection root;
+- default composition does not depend on graph internals;
+- graph builder and graph nodes remain independent from default composition;
+- provider runtime core does not depend outward on graph/public composition;
+- `role-composition.ts` remains a neutral compatibility forwarding layer;
+- Step 2 dependency/cycle guards remained green;
+- no production source changed;
+- no new dependency was added;
+- the complete alpha.3 deterministic regression gate remained green.
+
+**Decision:** proceed to Step 4 — Final Architecture Acceptance.
 
