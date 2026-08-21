@@ -10,9 +10,9 @@
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.4`
-**Status:** Architectural Foundation Alpha
-**Milestone:** `H-ARCH-004 — Establish Architectural Tests and Boundaries` ✅
+**Version:** `v0.1.0-alpha.5`
+**Status:** Telemetry Foundation Alpha
+**Milestone:** `H0-001 — Run Telemetry Foundation` ✅
 
 ### Architecture Milestone
 
@@ -56,13 +56,13 @@ npm run test:tools
 
 ### Release significance
 
-`v0.1.0-alpha.4` represents the completed architectural-foundation baseline of the QOS Harness. It is not yet a production-ready autonomous development system.
+`v0.1.0-alpha.5` represents the completed run-telemetry foundation of the QOS Harness. It is not yet a production-ready autonomous development system.
 
-The release proves modular graph boundaries, provider substitution, capability-aware runtime composition, safe provider cancellation semantics, deterministic dependency/cycle guards, and protected public/composition boundaries.
+The release proves that terminal Harness runs can be observed through versioned, provider-neutral telemetry containing lifecycle timing, terminal status, attempt counters, file metrics, and successful LLM call timing/token usage while preserving the H-ARCH architectural boundaries.
 
 ### Next milestone
 
-`H0-001 — Run Telemetry Foundation`
+`H0-002 — Benchmark Task Suite`
 
 # 1. Product Objective
 
@@ -5036,6 +5036,100 @@ Next architecture task — H-ARCH-004
 ```
 
 **Decision:** H-ARCH-003 is complete.
+
+# Release Procedure — v0.1.0-alpha.5
+
+`H0-001 — Run Telemetry Foundation` is accepted.
+
+Release name:
+
+```text
+v0.1.0-alpha.5 — Telemetry Foundation Alpha
+```
+
+Run the final deterministic release gate:
+
+```bash
+npm run typecheck && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+Review release metadata:
+
+```bash
+git diff -- package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
+git diff --check
+```
+
+Stage:
+
+```bash
+git add \
+  package.json \
+  package-lock.json \
+  CHANGELOG.md \
+  QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Create the release commit:
+
+```bash
+git commit -m "chore(release): prepare v0.1.0-alpha.5"
+```
+
+Create the annotated tag:
+
+```bash
+git tag -a v0.1.0-alpha.5 \
+  -m "QOS Harness v0.1.0-alpha.5 - telemetry foundation"
+```
+
+Publish:
+
+```bash
+git push origin main
+git push origin v0.1.0-alpha.5
+```
+
+Final verification:
+
+```bash
+git status
+git tag --list "v0.1.0*"
+git ls-remote --tags origin "v0.1.0-alpha.5"
+```
+
+After publication, development proceeds to:
+
+```text
+H0-002 — Benchmark Task Suite
+```
 
 # Release Procedure — v0.1.0-alpha.4
 

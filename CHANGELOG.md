@@ -1,5 +1,86 @@
 # Changelog
 
+## [0.1.0-alpha.5] - 2026-08-21
+
+### Added
+
+- Versioned run telemetry contract for terminal Harness executions
+- Run lifecycle recorder with generated run IDs, start/finish timestamps and duration
+- JSON telemetry persistence under `.runs/<run-id>.json`
+- Provider-neutral LLM call telemetry for planner, reviewer and refiner roles
+- Run-scoped LLM telemetry collector with model, elapsed time and optional token usage
+- Deterministic terminal `DevState` → telemetry completion projection
+- End-to-end telemetry integration acceptance test
+
+### Changed
+
+- `src/index.ts` now acts as the application composition edge for run telemetry
+- Graph construction accepts an optional run-scoped LLM telemetry sink
+- Architectural characterization/acceptance guards now include the explicit telemetry boundary
+- `.runs/` is ignored by Git so local telemetry does not contaminate source control
+- H0-001 — Run Telemetry Foundation is complete
+
+### Telemetry
+
+Each terminal Harness run can now persist a versioned record containing:
+
+```text
+runId
+startedAt
+finishedAt
+durationMs
+task
+repositoryPath
+finalStatus
+failureReason?
+
+attempts:
+  planning
+  review
+  task
+
+files:
+  read
+  changed[]
+
+llmCalls[]:
+  role
+  model
+  elapsedSeconds
+  promptTokens?
+  completionTokens?
+  totalTokens?
+```
+
+Telemetry remains outside `DevState`, provider-neutral, and isolated from the target repository.
+
+### Validation
+
+- TypeScript typecheck
+- H0-001 telemetry integration acceptance
+- LLM call telemetry tests
+- Run telemetry store tests
+- Run lifecycle recorder tests
+- Run telemetry contract tests
+- Run lifecycle characterization
+- H-ARCH-004 acceptance/public/dependency/boundary guards
+- H-ARCH-003 runtime/provider lifecycle regression
+- Provider architecture and cross-provider regression
+- Prompt and graph characterization
+- Repository tools tests
+- Manual Harness smoke producing a real ignored `.runs/<run-id>.json`
+
+### Milestone
+
+```text
+H0-001 ✅ Run Telemetry Foundation
+```
+
+### Next
+
+- `H0-002 — Benchmark Task Suite`
+- Define the fixed benchmark cases that will consume the telemetry foundation before implementing the benchmark runner
+
 ## [0.1.0-alpha.4] - 2026-08-21
 
 ### Added
