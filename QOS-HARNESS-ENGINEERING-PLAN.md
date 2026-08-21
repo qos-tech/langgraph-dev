@@ -10,9 +10,9 @@
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.5`
-**Status:** Telemetry Foundation Alpha
-**Milestone:** `H0-001 — Run Telemetry Foundation` ✅
+**Version:** `v0.1.0-alpha.6`
+**Status:** Benchmark Suite Alpha
+**Milestone:** `H0-002 — Benchmark Task Suite` ✅
 
 ### Architecture Milestone
 
@@ -56,13 +56,13 @@ npm run test:tools
 
 ### Release significance
 
-`v0.1.0-alpha.5` represents the completed run-telemetry foundation of the QOS Harness. It is not yet a production-ready autonomous development system.
+`v0.1.0-alpha.6` represents the completed fixed benchmark-suite foundation of the QOS Harness. It is not yet a production-ready autonomous development system.
 
-The release proves that terminal Harness runs can be observed through versioned, provider-neutral telemetry containing lifecycle timing, terminal status, attempt counters, file metrics, and successful LLM call timing/token usage while preserving the H-ARCH architectural boundaries.
+The release proves that benchmark tasks are versioned, fixed, machine-independent, deterministically validated, and evaluated through explicit acceptance semantics before the automatic benchmark runner is introduced.
 
 ### Next milestone
 
-`H0-002 — Benchmark Task Suite`
+`H0-003 — Benchmark Runner`
 
 # 1. Product Objective
 
@@ -5036,6 +5036,119 @@ Next architecture task — H-ARCH-004
 ```
 
 **Decision:** H-ARCH-003 is complete.
+
+# Release Procedure — v0.1.0-alpha.6
+
+`H0-002 — Benchmark Task Suite` is accepted.
+
+Release name:
+
+```text
+v0.1.0-alpha.6 — Benchmark Suite Alpha
+```
+
+Run the final deterministic release gate:
+
+```bash
+npm run typecheck && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+Review release metadata:
+
+```bash
+git diff -- package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
+git diff --check
+```
+
+Stage:
+
+```bash
+git add \
+  package.json \
+  package-lock.json \
+  CHANGELOG.md \
+  QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Review staged release:
+
+```bash
+git diff --cached --stat
+git diff --cached
+git diff --cached --check
+```
+
+Create the release commit:
+
+```bash
+git commit -m "chore(release): prepare v0.1.0-alpha.6"
+```
+
+Create the annotated tag:
+
+```bash
+git tag -a v0.1.0-alpha.6 \
+  -m "QOS Harness v0.1.0-alpha.6 - benchmark suite"
+```
+
+Verify:
+
+```bash
+git show v0.1.0-alpha.6 --stat
+```
+
+Publish:
+
+```bash
+git push origin main
+git push origin v0.1.0-alpha.6
+```
+
+Final verification:
+
+```bash
+git status
+git tag --list "v0.1.0*"
+git ls-remote --tags origin "v0.1.0-alpha.6"
+```
+
+After publication, development proceeds to:
+
+```text
+H0-003 — Benchmark Runner
+```
 
 # Release Procedure — v0.1.0-alpha.5
 

@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.1.0-alpha.6] - 2026-08-21
+
+### Added
+
+- Versioned benchmark task contract
+- Fixed B01–B05 benchmark suite covering trivial, already-satisfied, localized, cross-file and architectural/ambiguous cases
+- Deterministic benchmark acceptance rules
+- Deterministic benchmark suite integrity validator
+- Final H0-002 benchmark-suite acceptance test
+
+### Changed
+
+- Benchmark definitions now use machine-independent repository IDs and explicit revisions
+- Benchmark expected outcomes are explicit: `changes_required`, `already_satisfied`, or `blocked`
+- Already-satisfied benchmarks deterministically reject unnecessary file changes
+- Benchmark acceptance now rejects failed validation and required human intervention
+- `blocked` may be a correct benchmark result when it is the declared expected outcome
+- H0-002 — Benchmark Task Suite is complete
+
+### Benchmark Suite
+
+```text
+B01 — Trivial
+  expected: changes_required
+
+B02 — Already Satisfied
+  expected: already_satisfied
+
+B03 — Localized Change
+  expected: changes_required
+
+B04 — Cross-file Feature
+  expected: changes_required
+
+B05 — Architectural / Ambiguous
+  expected: blocked
+```
+
+### Validation
+
+- TypeScript typecheck
+- H0-002 final acceptance
+- Benchmark suite validation
+- Benchmark acceptance rules
+- Benchmark case definitions
+- Benchmark contract
+- H0-001 telemetry regression
+- H-ARCH-004 architecture acceptance/public/dependency/boundary guards
+- H-ARCH-003 runtime/provider lifecycle regression
+- Provider architecture and cross-provider regression
+- Prompt and graph characterization
+- Repository tools tests
+
+### Milestone
+
+```text
+H0-002 ✅ Benchmark Task Suite
+```
+
+### Next
+
+- `H0-003 — Benchmark Runner`
+- Resolve benchmark repository/revision identities into reproducible isolated working trees and execute the fixed suite
+
 ## [0.1.0-alpha.5] - 2026-08-21
 
 ### Added
