@@ -1,6 +1,6 @@
 {
   "name": "langgraph",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -27,7 +27,8 @@
     "test:runtime-composition": "tsx src/test-runtime-composition.ts",
     "test:llm-execution": "tsx src/test-llm-execution.ts",
     "test:provider-lifecycle": "tsx src/test-provider-lifecycle.ts",
-    "test:harch003-acceptance": "tsx src/test-harch003-acceptance.ts"
+    "test:harch003-acceptance": "tsx src/test-harch003-acceptance.ts",
+    "test:architecture-boundaries-characterization": "tsx src/test-architecture-boundaries-characterization.ts"
   },
   "keywords": [],
   "author": "",

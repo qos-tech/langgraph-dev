@@ -3,16 +3,16 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
-**Task status:** ✅ Complete
+**Current task:** `H-ARCH-004 — Step 1: Characterize Current Dependency Boundaries`
+**Task status:** ✅ Accepted — Step 1
 
 ---
 
 ### Current Release
 
-**Version:** `v0.1.0-alpha.2`
-**Status:** Provider Abstraction Alpha
-**Milestone:** `H-ARCH-002 — LLM Provider Contract` ✅
+**Version:** `v0.1.0-alpha.3`
+**Status:** Runtime Policy Alpha
+**Milestone:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening` ✅
 
 ### Architecture Milestone
 
@@ -62,8 +62,7 @@ The release proves provider-neutral graph execution with NVIDIA and Claude CLI b
 
 ### Next architecture task
 
-`H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
-
+`H-ARCH-004 — Establish Architectural Tests and Boundaries`
 
 # 1. Product Objective
 
@@ -378,7 +377,7 @@ No feature behavior changes during this milestone.
 - **H-ARCH-001 — Modularize Core Harness Without Behavior Changes**
 - H-ARCH-002 — Introduce LLM Provider Contract
 - H-ARCH-003 — Execution Policy / Runtime Composition Hardening
-- H-ARCH-004 — Establish Architectural Tests and Boundaries
+- **H-ARCH-004 — Establish Architectural Tests and Boundaries**
 
 > `H-ARCH-002` and later tasks may be adjusted after H-ARCH-001 evidence is collected. We do not prematurely implement the entire target architecture.
 
@@ -508,6 +507,7 @@ Use complementary reviewers without redundant calls.
 ### Proposed roles
 
 **Primary semantic reviewer**
+
 - unsupported assumptions;
 - missing evidence;
 - premature convergence;
@@ -517,6 +517,7 @@ Use complementary reviewers without redundant calls.
 Initial candidate: GPT-OSS.
 
 **Conditional efficiency reviewer**
+
 - excessive context;
 - repeated evidence;
 - unnecessary reads;
@@ -1361,7 +1362,6 @@ That belongs to `H-ARCH-002`, not this task.
 
 ---
 
-
 ## 12.16 Step 4 Detailed Specification — Extract Prompt Builders
 
 ### Objective
@@ -1523,8 +1523,6 @@ Do not yet:
 
 Those belong to later architecture/context tasks.
 
-
-
 ## 12.17 Step 5 Detailed Specification — Extract Routers
 
 ### Objective
@@ -1540,10 +1538,10 @@ src/graph/routers.ts
 It owns:
 
 ```ts
-afterPlanRouter
-reviewRouter
-afterReadRouter
-planGateRouter
+afterPlanRouter;
+reviewRouter;
+afterReadRouter;
+planGateRouter;
 ```
 
 ### Responsibilities
@@ -1622,8 +1620,6 @@ Do not yet:
 
 Graph construction is reserved for Step 6.
 
-
-
 ## 12.18 Step 6 Detailed Specification — Extract Graph Builder
 
 ### Objective
@@ -1701,8 +1697,6 @@ git commit -m "refactor(graph): extract graph builder"
 ### Non-goals
 
 Do not extract graph nodes in this step. Do not redesign dependency injection or create a generic graph factory yet. Those decisions should be evaluated after H-ARCH-001 is structurally complete.
-
-
 
 ## 12.13.7 Step 7 Validation Record
 
@@ -1870,7 +1864,6 @@ src/
 
 At that point, H-ARCH-001 should be considered structurally complete unless validation reveals a concrete reason for another extraction.
 
-
 # 13. Next Task Preview
 
 ## H-ARCH-002 — Introduce LLM Provider Contract
@@ -1883,7 +1876,9 @@ Tentative contract direction:
 
 ```ts
 export interface StructuredLlmProvider {
-  generateStructured<T>(request: StructuredLlmRequest<T>): Promise<StructuredLlmResult<T>>;
+  generateStructured<T>(
+    request: StructuredLlmRequest<T>,
+  ): Promise<StructuredLlmResult<T>>;
 }
 ```
 
@@ -2005,8 +2000,6 @@ Implementation proceeds **Step 1 → Step 8**, with validation after each meanin
 - [ ] Confirm baseline tests before Step 2.
 - [ ] Step 2 — Extract graph schemas.
 
-
-
 # H-ARCH-002 — LLM Provider Contract
 
 ## Status
@@ -2087,7 +2080,6 @@ The test must make zero real NVIDIA requests and require no real API key.
 
 Once this characterization passes, Step 2 may define the provider contract against observed behavior instead of assumptions.
 
-
 ### Current validation state
 
 The runtime characterization test already passes. The first `typecheck` exposed two test-only strict-TypeScript issues under `exactOptionalPropertyTypes`; a correction was prepared. Step 1 is not accepted until the corrected test passes the full gate:
@@ -2107,8 +2099,6 @@ Provider substitution must not require graph-node edits. The same orchestration 
 ## Non-goals
 
 H-ARCH-002 does not yet implement benchmark-driven model selection, telemetry dashboards, Repository Intelligence, Context Engine, implementation/fix agents, or specialist Product/UX/UI agents.
-
-
 
 ## H-ARCH-002 Step 1 Validation Record
 
@@ -2182,8 +2172,6 @@ Step 2 is complete when the contract compiles, a fake provider proves substituta
 
 **Next:** Step 3 — separate genuinely shared structured-output behavior from adapter-specific behavior.
 
-
-
 ## H-ARCH-002 Step 2 Validation Record
 
 **Status:** ✅ Accepted
@@ -2203,7 +2191,6 @@ The contract contains no NVIDIA, Claude, Ollama, HTTP, LangGraph, or Zod-specifi
 
 The full Step 2 gate passed.
 
-
 ## H-ARCH-002 Step 3 — Separate Shared Structured-Output Behavior
 
 **Status:** ✅ Accepted
@@ -2214,18 +2201,18 @@ Separate only the structured-output behavior that is demonstrably provider-neutr
 
 ### Evidence-based responsibility decision
 
-| Responsibility | Step 3 decision | Reason |
-| --- | --- | --- |
-| JSON object extraction | **Shared** | Pure transformation of model text; no NVIDIA dependency |
-| HTTP transport/auth | NVIDIA adapter | Provider-specific infrastructure |
-| Retry/backoff/Retry-After | NVIDIA adapter | Bound to HTTP/provider behavior |
-| Nemotron request body | NVIDIA adapter | Model/provider-specific |
-| GPT-OSS reasoning/recovery | NVIDIA adapter | Model-specific workaround |
-| Response content lookup | NVIDIA adapter | NVIDIA/OpenAI-compatible response shape |
-| Timing | NVIDIA adapter for now | Measures concrete provider execution |
-| Token usage mapping | NVIDIA adapter for now | NVIDIA currently returns snake_case |
-| Validation invocation | NVIDIA adapter for now | Current error context includes provider/model behavior |
-| Normalized provider errors | Deferred | Requires an explicit error contract, not yet defined |
+| Responsibility             | Step 3 decision        | Reason                                                  |
+| -------------------------- | ---------------------- | ------------------------------------------------------- |
+| JSON object extraction     | **Shared**             | Pure transformation of model text; no NVIDIA dependency |
+| HTTP transport/auth        | NVIDIA adapter         | Provider-specific infrastructure                        |
+| Retry/backoff/Retry-After  | NVIDIA adapter         | Bound to HTTP/provider behavior                         |
+| Nemotron request body      | NVIDIA adapter         | Model/provider-specific                                 |
+| GPT-OSS reasoning/recovery | NVIDIA adapter         | Model-specific workaround                               |
+| Response content lookup    | NVIDIA adapter         | NVIDIA/OpenAI-compatible response shape                 |
+| Timing                     | NVIDIA adapter for now | Measures concrete provider execution                    |
+| Token usage mapping        | NVIDIA adapter for now | NVIDIA currently returns snake_case                     |
+| Validation invocation      | NVIDIA adapter for now | Current error context includes provider/model behavior  |
+| Normalized provider errors | Deferred               | Requires an explicit error contract, not yet defined    |
 
 ### Architectural decision
 
@@ -2314,8 +2301,6 @@ Step 3 is complete when JSON extraction is a provider-neutral utility and the NV
 
 **Next:** Step 4 — convert NVIDIA into a `StructuredLlmProvider` adapter while preserving the characterized boundary.
 
-
-
 ## H-ARCH-002 Step 3 Validation Record
 
 **Status:** ✅ Accepted
@@ -2331,7 +2316,6 @@ src/providers/structured-output.ts
 The full Step 3 gate passed.
 
 **Decision:** proceed to Step 4 and make NVIDIA formally satisfy `StructuredLlmProvider` without changing graph-node dependencies yet.
-
 
 ## H-ARCH-002 Step 4 — Convert NVIDIA to Contract Adapter
 
@@ -2470,8 +2454,6 @@ Step 4 is complete when NVIDIA can be consumed through `StructuredLlmProvider` w
 
 **Next:** Step 5 — introduce explicit provider resolution/composition for agent roles without yet spreading provider-specific branches through the graph.
 
-
-
 ## H-ARCH-002 Step 4 Validation Record
 
 **Status:** ✅ Accepted
@@ -2487,7 +2469,6 @@ The full Step 4 gate passed.
 
 **Decision:** proceed to explicit role composition before changing graph-node
 dependencies.
-
 
 ## H-ARCH-002 Step 5 — Provider Resolution / Composition
 
@@ -2529,7 +2510,7 @@ preserving the exact model and execution settings currently duplicated in
 The current reviewer node contains model-family policy:
 
 ```ts
-REVIEW_MODEL.startsWith("openai/gpt-oss") ? 1800 : 1400
+REVIEW_MODEL.startsWith("openai/gpt-oss") ? 1800 : 1400;
 ```
 
 Leaving that policy in the graph would make Step 6 only superficially
@@ -2623,9 +2604,6 @@ deterministic, testable, and isolated from graph code.
 **Next:** Step 6 — inject the composed role bindings into graph nodes and remove
 the direct `callNvidiaJson` dependency.
 
-
-
-
 ## H-ARCH-002 Step 5 Validation Record
 
 **Status:** ✅ Accepted
@@ -2677,7 +2655,6 @@ git commit -m "refactor(graph): inject LLM provider bindings"
 Changing a role's provider no longer requires editing `src/graph/nodes.ts`.
 
 **Next:** Step 7 — add a second `StructuredLlmProvider` implementation.
-
 
 ## H-ARCH-002 Step 6 Validation Record
 
@@ -2762,7 +2739,6 @@ Step 7 is complete when Claude CLI satisfies the provider contract in determinis
 
 **Next:** Step 8 — Cross-Provider Acceptance.
 
-
 ## H-ARCH-002 Step 7 Validation Record
 
 **Status:** ✅ Accepted
@@ -2779,7 +2755,6 @@ The full Step 7 deterministic gate and live smoke passed.
 **Decision:** run the same provider-neutral acceptance scenario through both
 concrete adapters and prove a mixed Claude/NVIDIA graph composition without
 editing graph nodes.
-
 
 ## H-ARCH-002 Step 8 — Cross-Provider Acceptance
 
@@ -2968,8 +2943,6 @@ all deterministic gates pass, and the live two-provider acceptance succeeds.
 execution-budget contract issue, verify dependency direction, and determine
 whether H-ARCH-002 is ready for the next alpha release.
 
-
-
 ## H-ARCH-002 Step 8 Validation Record
 
 **Status:** ✅ Accepted
@@ -2994,7 +2967,6 @@ without changing graph nodes.
 
 **Decision:** proceed to the final architecture review with provider
 substitutability proven by both mocked and live acceptance.
-
 
 ## H-ARCH-002 Step 9 — Architecture Review / Release Decision
 
@@ -3206,8 +3178,6 @@ Step 9 is complete when the architecture guard and all deterministic regression
 gates pass. At that point H-ARCH-002 can be marked complete and the
 `v0.1.0-alpha.2` release can be prepared.
 
-
-
 ## H-ARCH-002 Step 9 Validation Record
 
 **Status:** ✅ Accepted
@@ -3230,7 +3200,6 @@ Verified outcomes:
 **Release decision:** `v0.1.0-alpha.2 — Provider Abstraction Alpha`
 
 **Next:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
-
 
 # H-ARCH-003 — Execution Policy / Runtime Composition Hardening
 
@@ -3289,18 +3258,18 @@ No production behavior changes are allowed.
 
 ### Current evidence matrix
 
-| Concern | NVIDIA | Claude CLI |
-| --- | --- | --- |
-| Shared structured provider contract | yes | yes |
-| `maxTokens` equivalent | maps to `max_tokens` | no equivalent |
-| `maxRetries` equivalent | provider-owned HTTP/network retries | no equivalent |
-| Timeout policy | none explicit | none explicit |
-| Invocation lifecycle | HTTP `fetch` per request | CLI runner/process invocation per request |
-| Structured-output transport | response text + shared JSON extraction | JSON CLI envelope; `structured_output` or JSON from `result` |
-| Usage normalization | NVIDIA snake_case → neutral usage | CLI input/output tokens → neutral usage |
-| Provider-specific model behavior | Nemotron/GPT-OSS request/recovery logic | CLI flags/isolation policy |
-| Retryable transport failures | 429/500/502/503/504 + network errors | no adapter retry policy |
-| Default provider | NVIDIA | non-default |
+| Concern                             | NVIDIA                                  | Claude CLI                                                   |
+| ----------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| Shared structured provider contract | yes                                     | yes                                                          |
+| `maxTokens` equivalent              | maps to `max_tokens`                    | no equivalent                                                |
+| `maxRetries` equivalent             | provider-owned HTTP/network retries     | no equivalent                                                |
+| Timeout policy                      | none explicit                           | none explicit                                                |
+| Invocation lifecycle                | HTTP `fetch` per request                | CLI runner/process invocation per request                    |
+| Structured-output transport         | response text + shared JSON extraction  | JSON CLI envelope; `structured_output` or JSON from `result` |
+| Usage normalization                 | NVIDIA snake_case → neutral usage       | CLI input/output tokens → neutral usage                      |
+| Provider-specific model behavior    | Nemotron/GPT-OSS request/recovery logic | CLI flags/isolation policy                                   |
+| Retryable transport failures        | 429/500/502/503/504 + network errors    | no adapter retry policy                                      |
+| Default provider                    | NVIDIA                                  | non-default                                                  |
 
 ### Key finding to protect
 
@@ -3435,7 +3404,6 @@ Step 1 is complete when the current provider execution-policy asymmetries are pr
 
 Only then may Step 2 decide whether a provider-capabilities contract is actually justified by evidence.
 
-
 ## H-ARCH-003 Step 1 Validation Record
 
 **Status:** ✅ Accepted
@@ -3477,8 +3445,7 @@ type StructuredLlmProviderCapabilities = Readonly<{
   supportsTransportRetries: boolean;
 }>;
 
-interface CapabilityAwareStructuredLlmProvider
-  extends StructuredLlmProvider {
+interface CapabilityAwareStructuredLlmProvider extends StructuredLlmProvider {
   readonly capabilities: StructuredLlmProviderCapabilities;
 }
 ```
@@ -3497,9 +3464,9 @@ belongs to later H-ARCH-003 steps.
 Step 1 produced concrete cross-provider evidence for exactly two semantic
 execution controls:
 
-| Capability | NVIDIA | Claude CLI |
-| --- | --- | --- |
-| output token limit | supported | unsupported |
+| Capability                      | NVIDIA    | Claude CLI  |
+| ------------------------------- | --------- | ----------- |
+| output token limit              | supported | unsupported |
 | adapter-owned transport retries | supported | unsupported |
 
 These controls are observable, semantically meaningful, and potentially useful
@@ -3633,8 +3600,6 @@ Step 2 is complete when provider capability metadata is explicit and verified
 without changing runtime policy.
 
 **Next:** Step 3 — Separate Portable Policy from Provider Hints.
-
-
 
 ## H-ARCH-003 Step 2 Validation Record
 
@@ -3830,7 +3795,6 @@ Do not yet:
 - change model defaults;
 - change prompt/routing behavior.
 
-
 ### Step 3 typecheck correction
 
 The first Step 3 gate exposed two characterization tests that still used the
@@ -3898,8 +3862,6 @@ separated from the core structured-generation request semantics while existing
 runtime behavior remains stable.
 
 **Next:** Step 4 — Introduce Runtime Role Configuration.
-
-
 
 ## H-ARCH-003 Step 3 Validation Record
 
@@ -4094,7 +4056,6 @@ Do not yet:
 - change graph topology;
 - change prompts or routing semantics.
 
-
 ### Step 4 typecheck correction
 
 The first Step 4 gate exposed a test-only typing mismatch in:
@@ -4160,8 +4121,6 @@ capability-aware, and isolated from both graph nodes and concrete provider
 adapters.
 
 **Next:** Step 5 — Centralize Timeout / Retry Ownership.
-
-
 
 ## H-ARCH-003 Step 4 Validation Record
 
@@ -4239,7 +4198,7 @@ src/providers/execution.ts
 with:
 
 ```ts
-executeStructuredLlm(runtime, request)
+executeStructuredLlm(runtime, request);
 ```
 
 Graph LLM nodes delegate all complete provider invocations through this
@@ -4438,7 +4397,6 @@ boundary and retry/timeout ownership is explicit without unsafe behavior.
 Step 6 must establish the cancellation/lifecycle evidence needed before a real
 portable timeout policy can be implemented.
 
-
 ## H-ARCH-003 Step 5 Validation Record
 
 **Status:** ✅ Accepted
@@ -4477,7 +4435,6 @@ one provider invocation, preserves the provider result/error semantics, and
 does not introduce hidden retry or fake timeout behavior.
 
 **Decision:** proceed to Step 6 — Provider Lifecycle / Process Policy.
-
 
 ## H-ARCH-003 Step 6 — Provider Lifecycle / Process Policy
 
@@ -4690,7 +4647,6 @@ actual underlying work and the full deterministic regression gate passes.
 
 **Next:** Step 7 — Cross-Provider Acceptance / Architecture Review.
 
-
 ## H-ARCH-003 Step 6 Validation Record
 
 **Status:** ✅ Accepted
@@ -4750,7 +4706,6 @@ prompt, or model-default behavior was introduced.
 
 **Decision:** proceed to Step 7 — Cross-Provider Acceptance / Architecture
 Review.
-
 
 ## H-ARCH-003 Step 7 — Cross-Provider Acceptance / Architecture Review
 
@@ -4942,7 +4897,6 @@ Do not:
 - change model defaults;
 - add telemetry/benchmark behavior.
 
-
 ### Step 7 acceptance-test correction
 
 The first Step 7 gate failed in `test:harch003-acceptance` because the
@@ -4969,7 +4923,6 @@ This is a test-only correction.
 
 No production source, runtime behavior, provider configuration, lifecycle,
 retry policy, or graph behavior changes.
-
 
 ### Deterministic gate
 
@@ -5029,7 +4982,6 @@ At that point H-ARCH-003 can be marked complete and work may proceed to:
 ```text
 H-ARCH-004 — Establish Architectural Tests and Boundaries
 ```
-
 
 ## H-ARCH-003 Step 7 Validation Record
 
@@ -5184,4 +5136,284 @@ git tag --list "v0.1.0*"
 After publication, development continues with:
 
 `H-ARCH-004 — Establish Architectural Tests and Boundaries`
+
+# H-ARCH-004 — Establish Architectural Tests and Boundaries
+
+## Status
+
+**Milestone:** 🚧 In progress
+**Current step:** Accepted — Step 1
+**Release baseline:** `v0.1.0-alpha.3`
+
+## Milestone objective
+
+Turn the architectural boundaries established by H-ARCH-001/002/003 into
+deterministic, repository-level invariants before benchmark, repository
+intelligence, context-engine and implementation work expand the codebase.
+
+H-ARCH-004 is intentionally test-heavy and production-code-light.
+
+The milestone does not redesign the architecture. It protects the architecture
+that already exists and only generalizes guards when current dependency evidence
+supports doing so.
+
+## Planned steps
+
+1. **Characterize Current Dependency Boundaries**
+2. **Add Module Dependency / Cycle Guards**
+3. **Protect Composition and Public Boundaries**
+4. **Final Architecture Acceptance**
+
+---
+
+## H-ARCH-004 Step 1 — Characterize Current Dependency Boundaries
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Freeze the current import/dependency shape of the architectural core before
+introducing generalized dependency and cycle rules.
+
+This is characterization only.
+
+No production behavior or production source changes are allowed.
+
+### Evidence from the current repository
+
+The current runtime path is:
+
+```text
+index.ts
+  → graph.ts
+  → default-composition
+  → graph builder / node factory
+
+graph/build-dev-graph.ts
+  → state
+  → runtime-composition
+  → nodes
+  → routers
+
+graph/nodes.ts
+  → state
+  → runtime-composition
+  → execution
+  → repository inspection/tools
+  → graph schemas/context/prompts
+```
+
+Provider-neutral runtime boundaries are currently:
+
+```text
+providers/contracts.ts
+providers/runtime-composition.ts
+providers/execution.ts
+providers/role-composition.ts
+providers/structured-output.ts
+```
+
+The concrete default composition root is:
+
+```text
+providers/default-composition.ts
+  → providers/nvidia.ts
+```
+
+Repository infrastructure is currently isolated in:
+
+```text
+repository/inspect.ts
+repository/tools.ts
+```
+
+### Existing architecture guard
+
+`src/test-provider-architecture.ts` already protects a focused subset of the
+architecture:
+
+- graph nodes/builder do not import concrete provider adapters;
+- runtime/contracts/execution remain provider-neutral;
+- default concrete provider selection stays in composition.
+
+H-ARCH-004 does not replace that test in Step 1.
+
+Step 1 adds a broader characterization baseline that later steps can generalize
+without guessing the current dependency graph.
+
+### Characterization test
+
+Create:
+
+```text
+src/test-architecture-boundaries-characterization.ts
+```
+
+The test reads a fixed set of core TypeScript modules and records their current
+static `import` / re-export specifiers.
+
+It intentionally does **not** implement a generic architecture policy engine or
+cycle detector yet.
+
+The characterized module set includes:
+
+```text
+index.ts
+state.ts
+graph.ts
+graph/*
+providers/contracts.ts
+providers/default-composition.ts
+providers/execution.ts
+providers/role-composition.ts
+providers/runtime-composition.ts
+providers/structured-output.ts
+repository/inspect.ts
+repository/tools.ts
+```
+
+### Why characterize before generalizing
+
+A generalized architectural guard can become harmful if it encodes an idealized
+dependency diagram rather than the repository that actually exists.
+
+Step 1 therefore freezes evidence first.
+
+Step 2 may then build a small dependency graph/cycle detector against known,
+accepted boundaries.
+
+### Files
+
+Create:
+
+```text
+src/test-architecture-boundaries-characterization.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Behavioral invariants
+
+Do not change:
+
+- graph topology;
+- graph node behavior;
+- prompts;
+- state schemas;
+- provider contracts;
+- provider capabilities/hints;
+- runtime composition;
+- provider adapters;
+- repository inspection/tools;
+- model defaults;
+- retry/cancellation semantics;
+- public exports.
+
+### Non-goals
+
+Do not yet:
+
+- add a generic dependency graph implementation;
+- add cycle detection;
+- reorganize folders;
+- move files between architecture layers;
+- add dependency-cruiser, madge or another runtime/dev dependency;
+- change `src/graph.ts`;
+- remove compatibility aliases;
+- redesign `state.ts`;
+- add telemetry;
+- add Repository Intelligence;
+- add Context Engine;
+- add Evidence Protocol;
+- add implementation/fix agents.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] dependency-boundary characterization test exists.
+- [x] current entry-point dependency is characterized.
+- [x] current graph compatibility/composition boundary is characterized.
+- [x] graph builder dependencies are characterized.
+- [x] graph-node application dependencies are characterized.
+- [x] graph helper/schema dependencies are characterized.
+- [x] neutral provider runtime dependencies are characterized.
+- [x] concrete default-composition dependency is characterized.
+- [x] repository infrastructure dependencies are characterized.
+- [x] builder → compatibility-boundary regression remains absent.
+- [x] graph nodes remain free of concrete provider imports.
+- [x] runtime composition remains free of concrete provider imports.
+- [x] execution boundary remains free of concrete provider imports.
+- [x] no production source changes.
+- [x] no new dependency is added.
+- [x] full alpha.3 deterministic regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "test(architecture): characterize dependency boundaries"
+```
+
+### Exit condition
+
+Step 1 is complete when the current architectural dependency shape is
+deterministically characterized and the full regression gate passes.
+
+**Next:** Step 2 — Add Module Dependency / Cycle Guards.
+
+
+## H-ARCH-004 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 1 gate passed in the development environment.
+
+Accepted outcome:
+
+- the current entry-point dependency is characterized;
+- the graph compatibility/composition boundary is characterized;
+- graph builder dependencies are characterized;
+- graph-node application dependencies are characterized;
+- graph helper/schema dependencies are characterized;
+- neutral provider runtime dependencies are characterized;
+- concrete default-composition dependency is characterized;
+- repository infrastructure dependencies are characterized;
+- builder → compatibility-boundary regression remains absent;
+- graph nodes remain free of concrete provider imports;
+- runtime composition remains provider-neutral;
+- execution boundary remains provider-neutral;
+- no production source changed;
+- no new dependency was added;
+- all alpha.3 deterministic regression gates remained green.
+
+**Decision:** proceed to Step 2 — Add Module Dependency / Cycle Guards.
 
