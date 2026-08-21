@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.1.0-alpha.3] - 2026-08-20
+
+### Added
+
+- Provider capability metadata for output-token limits and transport retries
+- Capability-aware runtime role configuration
+- Portable `executeStructuredLlm(...)` execution boundary
+- Cooperative `AbortSignal` cancellation in the shared structured LLM request
+- NVIDIA cancellation across fetch, retry backoff and GPT-OSS recovery
+- Claude CLI child-process cancellation through `SIGTERM`
+- Deterministic provider lifecycle tests
+- Final H-ARCH-003 cross-provider runtime acceptance test
+
+### Changed
+
+- Ambiguous shared `maxTokens` / `maxRetries` request controls were replaced by explicit provider hints
+- Runtime composition now removes unsupported provider hints before graph execution
+- Graph LLM nodes delegate complete provider calls through the portable execution boundary
+- Retry ownership is explicitly separated between provider transport retry, future whole-call retry and graph/task retry
+- Provider lifecycle semantics are now cancellation-aware without introducing a premature timeout policy
+
+### Architecture
+
+- Provider capabilities describe semantic controls rather than transport implementation details
+- `providerHints.maxOutputTokens` and `providerHints.transportRetries` remain provider-owned controls
+- Portable cancellation is distinct from provider-specific hints
+- NVIDIA keeps HTTP/network retries inside its adapter
+- Claude CLI keeps process lifecycle inside its adapter
+- Graph nodes remain provider-neutral and do not inspect capabilities
+- Whole-provider-call retry remains owned by the portable execution boundary but intentionally unimplemented
+- Timeout policy is deferred until production-hardening evidence defines duration, defaults and observability requirements
+
+### Validation
+
+- TypeScript typecheck
+- H-ARCH-003 final cross-provider runtime acceptance
+- Provider lifecycle cancellation tests
+- Portable LLM execution tests
+- Runtime composition tests
+- Provider hint and capability tests
+- Execution-policy characterization
+- Provider architecture tests
+- Mixed NVIDIA/Claude acceptance
+- Claude provider tests
+- Provider composition and injection tests
+- Provider contract and NVIDIA characterization tests
+- Prompt and graph characterization tests
+- Repository tools tests
+
+### Deferred
+
+- Harness-level whole-provider-call retry requires a normalized retryable-error taxonomy
+- Runtime timeout duration/default policy remains deferred to production hardening
+- Provider fallback, rate-limit orchestration and operational observability remain outside this alpha
+
 ## [0.1.0-alpha.2] - 2026-08-20
 
 ### Added

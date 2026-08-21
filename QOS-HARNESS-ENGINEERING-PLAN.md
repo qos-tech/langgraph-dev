@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Step 6: Provider Lifecycle / Process Policy`
-**Task status:** Accepted — Step 6
+**Current task:** `H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
+**Task status:** ✅ Complete
 
 ---
 
@@ -3236,9 +3236,10 @@ Verified outcomes:
 
 ## Status
 
-**Milestone:** In progress
-**Current step:** Step 6 — Provider Lifecycle / Process Policy
+**Milestone:** ✅ Complete
+**Current step:** Accepted
 **Release baseline:** `v0.1.0-alpha.2`
+**Release candidate:** `v0.1.0-alpha.3 — Runtime Policy Alpha`
 
 ## Milestone objective
 
@@ -4750,12 +4751,237 @@ prompt, or model-default behavior was introduced.
 **Decision:** proceed to Step 7 — Cross-Provider Acceptance / Architecture
 Review.
 
-# Release Procedure — v0.1.0-alpha.2
 
-Run the full release gate:
+## H-ARCH-003 Step 7 — Cross-Provider Acceptance / Architecture Review
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Close H-ARCH-003 by proving that the hardened runtime semantics remain
+provider-substitutable and that execution-policy ownership is now explicit,
+safe, and provider-neutral.
+
+This is an acceptance/review step.
+
+No production runtime behavior should be added merely to make the milestone
+look more complete.
+
+### Final architecture under review
+
+```text
+outer composition
+  → LlmRuntimeConfig
+  → resolveLlmRoleRuntime(...)
+  → capability-filtered provider hints
+  → graph node
+  → executeStructuredLlm(...)
+  → StructuredLlmRequest
+       ├── prompt / validate
+       ├── signal?
+       └── providerHints?
+  → concrete provider adapter
+```
+
+Provider-specific internals remain:
+
+```text
+NVIDIA
+  → HTTP/network transport retries
+  → model-family request behavior
+  → fetch cancellation
+
+Claude CLI
+  → CLI invocation/isolation flags
+  → child-process lifecycle
+  → SIGTERM cancellation
+```
+
+### Step 7 acceptance scenario
+
+Create one deterministic cross-provider runtime acceptance test:
+
+```text
+src/test-harch003-acceptance.ts
+```
+
+It uses real adapter classes with mocked provider transport:
+
+```text
+NvidiaProvider
+  → mocked fetch
+
+ClaudeCliProvider
+  → injected runner
+```
+
+No NVIDIA API call or Claude quota is consumed.
+
+### Acceptance assertions
+
+The final test must prove all of the following together:
+
+#### Runtime composition
+
+- a mixed Claude/NVIDIA runtime still composes;
+- unsupported Claude provider hints are stripped;
+- supported NVIDIA provider hints are preserved;
+- the graph/runtime layer does not branch on concrete providers.
+
+#### Portable execution
+
+- both providers execute through `executeStructuredLlm(...)`;
+- both return the same portable validated application shape;
+- the execution boundary performs no hidden whole-call retry.
+
+#### Lifecycle
+
+- cancellation crosses `executeStructuredLlm(...)`;
+- NVIDIA receives the exact signal at the transport boundary;
+- NVIDIA cancellation does not become a transport retry;
+- Claude receives the exact signal at the runner boundary;
+- Claude cancellation does not trigger a Harness whole-call retry.
+
+#### Architecture
+
+- `StructuredLlmRequest` contains portable `signal`;
+- provider hints remain explicitly separate;
+- old ambiguous `maxTokens` / `maxRetries` request controls do not return;
+- runtime composition imports no concrete provider;
+- graph nodes import no concrete provider;
+- graph nodes do not inspect capabilities;
+- execution boundary imports no concrete provider;
+- NVIDIA retains adapter-owned retry behavior;
+- Claude retains process-owned `SIGTERM` lifecycle.
+
+### Timeout decision
+
+**Decision:** do not add `timeoutMs` in H-ARCH-003 Step 7.
+
+Step 6 established the correct cancellation primitive, but timeout duration,
+defaults, role budgets, observability, and operational policy are production
+hardening concerns.
+
+The roadmap already reserves explicit timeout/fallback/rate-limit hardening for
+H11.
+
+Adding a timeout now would introduce a new operational policy without benchmark
+or production evidence and would violate the evidence-driven scope of this
+milestone.
+
+### Whole-call retry decision
+
+**Decision:** do not add Harness whole-provider-call retry in H-ARCH-003.
+
+The execution boundary owns that future concern, but the current contract still
+has no normalized retryable-error taxonomy.
+
+Blindly retrying every provider exception would be unsafe.
+
+Transport retry remains provider-owned; task retry remains orchestration-owned.
+
+### Fallback decision
+
+Provider fallback remains out of scope and stays in production hardening.
+
+### H-ARCH-003 milestone outcome if accepted
+
+The milestone will have established:
+
+```text
+capability-aware providers
+  ↓
+explicit provider hints
+  ↓
+capability-aware runtime composition
+  ↓
+portable execution boundary
+  ↓
+clear retry ownership
+  ↓
+portable cooperative cancellation
+  ↓
+provider-specific real lifecycle cancellation
+```
+
+without leaking NVIDIA/Claude branching into graph code.
+
+### Files
+
+Create:
+
+```text
+src/test-harch003-acceptance.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source in Step 7 unless the acceptance gate exposes a
+concrete architecture defect.
+
+### Non-goals
+
+Do not:
+
+- add `timeoutMs`;
+- add `AbortSignal.timeout()`;
+- add Harness whole-call retries;
+- add provider fallback;
+- add normalized error taxonomy;
+- change NVIDIA retry/backoff;
+- change Claude CLI flags;
+- optimize Claude startup;
+- change runtime role defaults;
+- change graph topology;
+- change prompts/routing;
+- change model defaults;
+- add telemetry/benchmark behavior.
+
+
+### Step 7 acceptance-test correction
+
+The first Step 7 gate failed in `test:harch003-acceptance` because the
+architecture assertion searched the entire Claude adapter source for the text:
+
+```text
+--max-turns
+```
+
+The adapter intentionally contains that text in a comment documenting that the
+flag must **not** be used.
+
+The assertion therefore produced a false positive even though the actual CLI
+argument list did not contain `--max-turns`.
+
+The correction narrows the source check to reject only a quoted CLI argument:
+
+```text
+"--max-turns"
+'--max-turns'
+```
+
+This is a test-only correction.
+
+No production source, runtime behavior, provider configuration, lifecycle,
+retry policy, or graph behavior changes.
+
+
+### Deterministic gate
 
 ```bash
 npm run typecheck && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
 npm run test:provider-architecture && \
 npm run test:cross-provider && \
 npm run test:claude-provider && \
@@ -4768,7 +4994,128 @@ npm run test:graph-characterization && \
 npm run test:tools
 ```
 
-Run the live provider smoke:
+### Acceptance criteria
+
+- [x] final H-ARCH-003 cross-provider acceptance test exists.
+- [x] mixed runtime composition remains valid.
+- [x] capability filtering behaves correctly across NVIDIA/Claude.
+- [x] both providers execute through the portable execution boundary.
+- [x] both providers preserve the shared structured result contract.
+- [x] cancellation crosses the portable execution boundary for both providers.
+- [x] NVIDIA cancellation does not trigger transport retry progression.
+- [x] Claude cancellation does not trigger Harness whole-call retries.
+- [x] graph remains provider-neutral.
+- [x] graph does not inspect provider capabilities.
+- [x] runtime composition remains provider-neutral.
+- [x] execution boundary remains provider-neutral.
+- [x] provider hints remain distinct from portable cancellation.
+- [x] no timeout policy is added.
+- [x] no Harness whole-call retry is added.
+- [x] no fallback is added.
+- [x] all deterministic alpha.2/H-ARCH-003 gates remain green.
+
+### Commit
+
+```bash
+git commit -m "test(runtime): close execution policy hardening"
+```
+
+### Exit condition
+
+Step 7 is accepted when the full deterministic gate passes.
+
+At that point H-ARCH-003 can be marked complete and work may proceed to:
+
+```text
+H-ARCH-004 — Establish Architectural Tests and Boundaries
+```
+
+
+## H-ARCH-003 Step 7 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 7 gate passed in the development environment after
+one test-only false-positive correction.
+
+The first acceptance run incorrectly rejected the Claude adapter because the
+source-code guard matched `--max-turns` inside a comment that explicitly
+documents that the flag is **not** used. The guard was narrowed to reject only
+a quoted CLI argument. No production behavior changed.
+
+Final accepted architecture:
+
+```text
+outer composition
+  → LlmRuntimeConfig
+  → resolveLlmRoleRuntime(...)
+  → capability-filtered provider hints
+  → graph node
+  → executeStructuredLlm(...)
+  → StructuredLlmRequest
+       ├── prompt / validate
+       ├── signal?
+       └── providerHints?
+  → concrete provider adapter
+```
+
+Verified outcomes:
+
+- mixed NVIDIA/Claude runtime composition remains valid;
+- unsupported Claude hints are removed before execution;
+- supported NVIDIA hints are preserved;
+- graph nodes remain provider-neutral and capability-agnostic;
+- complete LLM calls cross the portable execution boundary;
+- cancellation crosses that boundary for both concrete providers;
+- NVIDIA cancellation stops underlying fetch/retry progression;
+- Claude cancellation terminates the underlying CLI process lifecycle;
+- transport retry remains provider-owned;
+- Harness whole-call retry remains intentionally unimplemented;
+- no runtime timeout policy or fallback was added;
+- all H-ARCH-003 and alpha.2 deterministic regression gates remain green.
+
+### Milestone conclusion
+
+```text
+H-ARCH-003 — ACCEPTED
+Release candidate — v0.1.0-alpha.3
+Release name — Runtime Policy Alpha
+Next architecture task — H-ARCH-004
+```
+
+**Decision:** H-ARCH-003 is complete.
+
+# Release Procedure — v0.1.0-alpha.3
+
+`H-ARCH-003` is accepted. Prepare the `Runtime Policy Alpha` release only after
+the Step 7 acceptance commit exists.
+
+Run the final deterministic release gate:
+
+```bash
+npm run typecheck && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+The live NVIDIA/Claude acceptance from the provider-abstraction release does not
+need to become part of every deterministic architecture gate. Run it as an
+explicit release smoke if provider credentials/quota are available:
 
 ```bash
 npm run test:cross-provider-live
@@ -4777,39 +5124,54 @@ npm run test:cross-provider-live
 Update package metadata:
 
 ```bash
-npm version 0.1.0-alpha.2 --no-git-tag-version
+npm version 0.1.0-alpha.3 --no-git-tag-version
 git diff -- package.json package-lock.json
 ```
 
-Stage and review:
+After the version command, update the top `Current Release` block in this plan
+from `v0.1.0-alpha.2` to:
+
+```text
+Version: v0.1.0-alpha.3
+Status: Runtime Policy Alpha
+Milestone: H-ARCH-003 — Execution Policy / Runtime Composition Hardening ✅
+Next architecture task: H-ARCH-004 — Establish Architectural Tests and Boundaries
+```
+
+Stage and review the release-only metadata:
 
 ```bash
-git add package.json package-lock.json CHANGELOG.md QOS-HARNESS-ENGINEERING-PLAN.md
+git add \
+  package.json \
+  package-lock.json \
+  CHANGELOG.md \
+  QOS-HARNESS-ENGINEERING-PLAN.md
+
 git diff --cached --stat
 git diff --cached
-git diff --check
+git diff --cached --check
 ```
 
 Create the release commit:
 
 ```bash
-git commit -m "chore(release): prepare v0.1.0-alpha.2"
+git commit -m "chore(release): prepare v0.1.0-alpha.3"
 ```
 
 Create and verify the annotated tag:
 
 ```bash
-git tag -a v0.1.0-alpha.2 \
-  -m "QOS Harness v0.1.0-alpha.2 - provider abstraction"
+git tag -a v0.1.0-alpha.3 \
+  -m "QOS Harness v0.1.0-alpha.3 - runtime policy"
 
-git show v0.1.0-alpha.2 --stat
+git show v0.1.0-alpha.3 --stat
 ```
 
 Publish:
 
 ```bash
 git push origin main
-git push origin v0.1.0-alpha.2
+git push origin v0.1.0-alpha.3
 ```
 
 Final verification:
@@ -4821,4 +5183,5 @@ git tag --list "v0.1.0*"
 
 After publication, development continues with:
 
-`H-ARCH-003 — Execution Policy / Runtime Composition Hardening`
+`H-ARCH-004 — Establish Architectural Tests and Boundaries`
+
