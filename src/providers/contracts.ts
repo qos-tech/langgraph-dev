@@ -11,22 +11,32 @@ export type LlmUsage = {
   totalTokens?: number;
 };
 
+export type StructuredLlmProviderHints = Readonly<{
+  /**
+   * Provider-side output token ceiling when supported.
+   */
+  maxOutputTokens?: number;
+
+  /**
+   * Provider/transport retries beyond the initial attempt when supported.
+   *
+   * This is intentionally not a Harness-level task retry policy.
+   */
+  transportRetries?: number;
+}>;
+
 export type StructuredLlmRequest<T> = {
   model: string;
   prompt: string;
   validate: (value: unknown) => T;
 
   /**
-   * Optional execution hints.
+   * Optional provider execution hints.
    *
-   * Providers may honor these when equivalent controls exist. They are not
-   * cross-provider guarantees: the current NVIDIA adapter supports them,
-   * while Claude Code CLI has no equivalent max-token/retry semantics.
-   *
-   * Capability-aware execution policy is deferred to H-ARCH-003.
+   * These are not portable guarantees. Consumers can inspect provider
+   * capabilities before depending on a hint being honored.
    */
-  maxTokens?: number;
-  maxRetries?: number;
+  providerHints?: StructuredLlmProviderHints;
 };
 
 export type StructuredLlmResult<T> = {

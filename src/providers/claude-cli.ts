@@ -127,12 +127,11 @@ export class ClaudeCliProvider
     const startedAt = performance.now();
 
     /*
-     * Claude Code CLI does not expose equivalents for the optional
-     * maxTokens/maxRetries execution hints. They are intentionally not
-     * translated into unrelated CLI flags such as --max-turns.
+     * Claude Code CLI does not expose equivalents for the current provider
+     * hints. They are intentionally not translated into unrelated CLI flags
+     * such as --max-turns.
      */
-    void request.maxTokens;
-    void request.maxRetries;
+    void request.providerHints;
 
     const args = [
       "-p",

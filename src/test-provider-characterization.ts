@@ -164,8 +164,10 @@ try {
     model: "vendor/model",
     prompt: "adapter prompt",
     validate: (v) => v as { adapter: boolean },
-    maxTokens: 777,
-    maxRetries: 0,
+    providerHints: {
+      maxOutputTokens: 777,
+      transportRetries: 0,
+    },
   });
 
   assert.deepEqual(adapterResult.data, {

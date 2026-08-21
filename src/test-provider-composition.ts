@@ -34,20 +34,26 @@ const customBindings = defineLlmRoleBindings({
   planner: {
     provider: providerA,
     model: "planner-model",
-    maxTokens: 1000,
-    maxRetries: 2,
+    providerHints: {
+      maxOutputTokens: 1000,
+      transportRetries: 2,
+    },
   },
   reviewer: {
     provider: providerB,
     model: "reviewer-model",
-    maxTokens: 1200,
-    maxRetries: 3,
+    providerHints: {
+      maxOutputTokens: 1200,
+      transportRetries: 3,
+    },
   },
   refiner: {
     provider: providerA,
     model: "refiner-model",
-    maxTokens: 1400,
-    maxRetries: 4,
+    providerHints: {
+      maxOutputTokens: 1400,
+      transportRetries: 4,
+    },
   },
 });
 
@@ -77,13 +83,18 @@ assert.equal(
   "nvidia/nemotron-step5-test",
 );
 
-assert.equal(defaultLlmRoleBindings.planner.maxTokens, 1800);
-assert.equal(defaultLlmRoleBindings.reviewer.maxTokens, 1800);
-assert.equal(defaultLlmRoleBindings.refiner.maxTokens, 2600);
-
-assert.equal(defaultLlmRoleBindings.planner.maxRetries, 6);
-assert.equal(defaultLlmRoleBindings.reviewer.maxRetries, 6);
-assert.equal(defaultLlmRoleBindings.refiner.maxRetries, 6);
+assert.deepEqual(defaultLlmRoleBindings.planner.providerHints, {
+  maxOutputTokens: 1800,
+  transportRetries: 6,
+});
+assert.deepEqual(defaultLlmRoleBindings.reviewer.providerHints, {
+  maxOutputTokens: 1800,
+  transportRetries: 6,
+});
+assert.deepEqual(defaultLlmRoleBindings.refiner.providerHints, {
+  maxOutputTokens: 2600,
+  transportRetries: 6,
+});
 
 assert.equal(
   defaultLlmRoleBindings.planner.provider,

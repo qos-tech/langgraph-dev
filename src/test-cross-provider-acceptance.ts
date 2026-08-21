@@ -51,8 +51,10 @@ async function assertPortableScenario(
     model,
     prompt,
     validate: validatePortableShape,
-    maxTokens: 400,
-    maxRetries: 0,
+    providerHints: {
+      maxOutputTokens: 400,
+      transportRetries: 0,
+    },
   };
 
   const result = await provider.generateStructured(request);
@@ -133,22 +135,28 @@ try {
     planner: {
       provider: claudeProvider,
       model: "sonnet",
-      maxTokens: 1800,
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: 1800,
+        transportRetries: 6,
+      },
     },
 
     reviewer: {
       provider: nvidiaProvider,
       model: "openai/gpt-oss-20b",
-      maxTokens: 1800,
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: 1800,
+        transportRetries: 6,
+      },
     },
 
     refiner: {
       provider: claudeProvider,
       model: "sonnet",
-      maxTokens: 2600,
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: 2600,
+        transportRetries: 6,
+      },
     },
   });
 

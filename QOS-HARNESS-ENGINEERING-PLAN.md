@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Step 2: Define Provider Capabilities Contract`
-**Task status:** In progress — Step 2
+**Current task:** `H-ARCH-003 — Step 3: Separate Portable Policy from Provider Hints`
+**Task status:** In progress — Step 3
 
 ---
 
@@ -3237,7 +3237,7 @@ Verified outcomes:
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 2 — Define Provider Capabilities Contract
+**Current step:** Step 3 — Separate Portable Policy from Provider Hints
 **Release baseline:** `v0.1.0-alpha.2`
 
 ## Milestone objective
@@ -3459,7 +3459,7 @@ controls that the orchestrator can meaningfully reason about.
 
 ## H-ARCH-003 Step 2 — Define Provider Capabilities Contract
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -3632,6 +3632,271 @@ Step 2 is complete when provider capability metadata is explicit and verified
 without changing runtime policy.
 
 **Next:** Step 3 — Separate Portable Policy from Provider Hints.
+
+
+
+## H-ARCH-003 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The provider-capabilities contract and full deterministic regression gate passed.
+
+Accepted capability metadata:
+
+```text
+NVIDIA:
+  supportsOutputTokenLimit = true
+  supportsTransportRetries = true
+
+Claude CLI:
+  supportsOutputTokenLimit = false
+  supportsTransportRetries = false
+```
+
+The base `StructuredLlmProvider` contract remained valid and role bindings were
+not changed during Step 2.
+
+**Decision:** Step 3 may now separate provider-specific execution hints from
+future portable Harness policy.
+
+---
+
+## H-ARCH-003 Step 3 — Separate Portable Policy from Provider Hints
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Remove ambiguous `maxTokens` / `maxRetries` fields from the shared structured
+request and replace them with explicitly named provider hints.
+
+This step does **not** introduce portable Harness execution policy yet.
+
+### Architectural decision
+
+The provider-neutral application request remains:
+
+```text
+model
+prompt
+validate
+```
+
+Optional provider-specific controls are grouped under:
+
+```ts
+type StructuredLlmProviderHints = Readonly<{
+  maxOutputTokens?: number;
+  transportRetries?: number;
+}>;
+```
+
+and attached as:
+
+```ts
+providerHints?: StructuredLlmProviderHints;
+```
+
+### Semantic separation
+
+```text
+Application request:
+  model
+  prompt
+  validate
+
+Provider hints:
+  maxOutputTokens
+  transportRetries
+
+Portable Harness policy:
+  intentionally not defined yet
+```
+
+This matters because:
+
+- `maxOutputTokens` is a provider generation control, not a Harness guarantee;
+- `transportRetries` describes retries owned by a provider/transport adapter;
+- neither should be confused with future task-level retry, fallback, timeout,
+  or orchestration policy.
+
+### NVIDIA mapping
+
+The NVIDIA adapter maps:
+
+```text
+providerHints.maxOutputTokens
+  → legacy NvidiaCallOptions.maxTokens
+  → NVIDIA max_tokens
+
+providerHints.transportRetries
+  → legacy NvidiaCallOptions.maxRetries
+  → current HTTP/network retry loop
+```
+
+This preserves existing NVIDIA runtime behavior while making the external
+semantics explicit.
+
+### Claude mapping
+
+Claude CLI advertises both capabilities as unsupported.
+
+The adapter accepts the shared request shape but does not invent CLI mappings
+for unsupported hints.
+
+### Role composition
+
+`LlmRoleBinding` changes from:
+
+```text
+provider
+model
+maxTokens
+maxRetries
+```
+
+to:
+
+```text
+provider
+model
+providerHints?
+```
+
+The current default NVIDIA role values are preserved exactly:
+
+```text
+planner:
+  maxOutputTokens = 1800
+  transportRetries = 6
+
+reviewer:
+  maxOutputTokens = 1800 for GPT-OSS, otherwise 1400
+  transportRetries = 6
+
+refiner:
+  maxOutputTokens = 2600
+  transportRetries = 6
+```
+
+### Graph behavior
+
+Graph nodes remain provider-neutral.
+
+They forward `binding.providerHints` without inspecting capabilities or
+branching on concrete providers.
+
+Capability-aware policy decisions belong to the next runtime-composition steps.
+
+### Files
+
+Create:
+
+```text
+src/test-provider-hints.ts
+```
+
+Modify:
+
+```text
+src/providers/contracts.ts
+src/providers/role-composition.ts
+src/providers/default-composition.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+src/graph/nodes.ts
+src/test-provider-contract.ts
+src/test-provider-composition.ts
+src/test-provider-injection.ts
+src/test-provider-execution-policy-characterization.ts
+src/test-cross-provider-acceptance.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+### Non-goals
+
+Do not yet:
+
+- introduce `timeoutMs`;
+- introduce Harness/task retry policy;
+- move NVIDIA transport retry implementation;
+- make graph nodes inspect capabilities;
+- reject unsupported hints at runtime;
+- add fallback;
+- optimize Claude process startup;
+- redesign provider lifecycle;
+- change model defaults;
+- change prompt/routing behavior.
+
+
+### Step 3 typecheck correction
+
+The first Step 3 gate exposed two characterization tests that still used the
+removed `StructuredLlmRequest.maxTokens` / `maxRetries` fields:
+
+```text
+src/test-claude-provider.ts
+src/test-provider-characterization.ts
+```
+
+These tests are part of the same Step 3 semantic migration and now use:
+
+```text
+providerHints.maxOutputTokens
+providerHints.transportRetries
+```
+
+No production behavior changes are introduced by this correction.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] `maxTokens` is removed from `StructuredLlmRequest`.
+- [ ] `maxRetries` is removed from `StructuredLlmRequest`.
+- [ ] provider hints use explicit semantic names.
+- [ ] role bindings carry optional provider hints rather than ambiguous budgets.
+- [ ] NVIDIA default output-token values remain unchanged.
+- [ ] NVIDIA default transport-retry values remain unchanged.
+- [ ] Claude CLI still does not map unsupported hints to unrelated flags.
+- [ ] graph nodes remain provider-neutral.
+- [ ] no portable Harness timeout/retry policy is invented early.
+- [ ] provider capability tests remain green.
+- [ ] execution-policy characterization remains green.
+- [ ] cross-provider deterministic acceptance remains green.
+- [ ] all alpha.2 regression gates remain green.
+
+### Commit
+
+```bash
+git commit -m "refactor(provider): separate provider execution hints"
+```
+
+### Exit condition
+
+Step 3 is complete when provider-specific execution controls are explicitly
+separated from the core structured-generation request semantics while existing
+runtime behavior remains stable.
+
+**Next:** Step 4 — Introduce Runtime Role Configuration.
 
 
 # Release Procedure — v0.1.0-alpha.2

@@ -16,7 +16,7 @@ const plannerModel =
 const reviewModel =
   process.env.NVIDIA_REVIEW_MODEL ?? DEFAULT_REVIEW_MODEL;
 
-function reviewMaxTokens(model: string): number {
+function reviewMaxOutputTokens(model: string): number {
   return model.startsWith("openai/gpt-oss") ? 1800 : 1400;
 }
 
@@ -26,29 +26,35 @@ function reviewMaxTokens(model: string): number {
  * Concrete provider/model selection belongs here rather than in graph nodes.
  * The graph consumes only provider-neutral role bindings.
  *
- * maxTokens/maxRetries are role-level execution hints. NVIDIA currently
- * honors them; providers without equivalent controls may ignore them.
+ * Provider execution hints preserve the current NVIDIA output-token and
+ * transport-retry behavior. They are not portable Harness execution policy.
  */
 export const defaultLlmRoleBindings: LlmRoleBindings =
   defineLlmRoleBindings({
     planner: {
       provider: nvidiaProvider,
       model: plannerModel,
-      maxTokens: 1800,
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: 1800,
+        transportRetries: 6,
+      },
     },
 
     reviewer: {
       provider: nvidiaProvider,
       model: reviewModel,
-      maxTokens: reviewMaxTokens(reviewModel),
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: reviewMaxOutputTokens(reviewModel),
+        transportRetries: 6,
+      },
     },
 
     refiner: {
       provider: nvidiaProvider,
       model: plannerModel,
-      maxTokens: 2600,
-      maxRetries: 6,
+      providerHints: {
+        maxOutputTokens: 2600,
+        transportRetries: 6,
+      },
     },
   });

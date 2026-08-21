@@ -43,8 +43,10 @@ const result = await fakeProvider.generateStructured({
       accepted: true as const,
     };
   },
-  maxTokens: 500,
-  maxRetries: 2,
+  providerHints: {
+    maxOutputTokens: 500,
+    transportRetries: 2,
+  },
 });
 
 assert.deepEqual(result.data, {

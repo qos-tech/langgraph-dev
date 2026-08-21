@@ -1,4 +1,7 @@
-import type { StructuredLlmProvider } from "./contracts.js";
+import type {
+  StructuredLlmProvider,
+  StructuredLlmProviderHints,
+} from "./contracts.js";
 
 export type LlmRole = "planner" | "reviewer" | "refiner";
 
@@ -7,11 +10,13 @@ export type LlmRoleBinding = Readonly<{
   model: string;
 
   /**
-   * Role-level execution hints forwarded through StructuredLlmRequest.
-   * Concrete providers may support only a subset of these controls.
+   * Provider-specific execution hints for this role.
+   *
+   * These values are semantically distinct from future portable Harness
+   * execution policy. Providers may honor only the hints covered by their
+   * advertised capabilities.
    */
-  maxTokens: number;
-  maxRetries: number;
+  providerHints?: StructuredLlmProviderHints;
 }>;
 
 export type LlmRoleBindings = Readonly<Record<LlmRole, LlmRoleBinding>>;

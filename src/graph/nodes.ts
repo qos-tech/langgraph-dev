@@ -79,8 +79,11 @@ function createPlanNode(llmRoleBindings: LlmRoleBindings) {
       model: binding.model,
       prompt,
       validate: (value) => ExplorationSchema.parse(value),
-      maxTokens: binding.maxTokens,
-      maxRetries: binding.maxRetries,
+      ...(binding.providerHints
+        ? {
+            providerHints: binding.providerHints,
+          }
+        : {}),
     });
 
     const plan = normalizeRequests(state, result.data);
@@ -124,8 +127,11 @@ function createReviewPlanNode(llmRoleBindings: LlmRoleBindings) {
       model: binding.model,
       prompt,
       validate: (value) => ReviewSchema.parse(value),
-      maxTokens: binding.maxTokens,
-      maxRetries: binding.maxRetries,
+      ...(binding.providerHints
+        ? {
+            providerHints: binding.providerHints,
+          }
+        : {}),
     });
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
@@ -248,8 +254,11 @@ function createRefineNode(llmRoleBindings: LlmRoleBindings) {
       model: binding.model,
       prompt,
       validate: (value) => RefinedSchema.parse(value),
-      maxTokens: binding.maxTokens,
-      maxRetries: binding.maxRetries,
+      ...(binding.providerHints
+        ? {
+            providerHints: binding.providerHints,
+          }
+        : {}),
     });
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);

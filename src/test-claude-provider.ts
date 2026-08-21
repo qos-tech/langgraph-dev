@@ -33,8 +33,10 @@ const base = await provider.generateStructured({
   model: "sonnet",
   prompt: "Return JSON",
   validate: (value) => value as { ok: boolean },
-  maxTokens: 999,
-  maxRetries: 4,
+  providerHints: {
+    maxOutputTokens: 999,
+    transportRetries: 4,
+  },
 });
 
 assert.deepEqual(base.data, { ok: true });

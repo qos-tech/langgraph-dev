@@ -494,14 +494,14 @@ export class NvidiaProvider implements CapabilityAwareStructuredLlmProvider {
     request: StructuredLlmRequest<T>,
   ): Promise<StructuredLlmResult<T>> {
     const options: NvidiaCallOptions = {
-      ...(request.maxTokens !== undefined
+      ...(request.providerHints?.maxOutputTokens !== undefined
         ? {
-            maxTokens: request.maxTokens,
+            maxTokens: request.providerHints.maxOutputTokens,
           }
         : {}),
-      ...(request.maxRetries !== undefined
+      ...(request.providerHints?.transportRetries !== undefined
         ? {
-            maxRetries: request.maxRetries,
+            maxRetries: request.providerHints.transportRetries,
           }
         : {}),
     };

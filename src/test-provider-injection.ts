@@ -33,20 +33,26 @@ const bindings = defineLlmRoleBindings({
   planner: {
     provider: providerA,
     model: "planner-test-model",
-    maxTokens: 101,
-    maxRetries: 1,
+    providerHints: {
+      maxOutputTokens: 101,
+      transportRetries: 1,
+    },
   },
   reviewer: {
     provider: providerB,
     model: "reviewer-test-model",
-    maxTokens: 202,
-    maxRetries: 2,
+    providerHints: {
+      maxOutputTokens: 202,
+      transportRetries: 2,
+    },
   },
   refiner: {
     provider: providerA,
     model: "refiner-test-model",
-    maxTokens: 303,
-    maxRetries: 3,
+    providerHints: {
+      maxOutputTokens: 303,
+      transportRetries: 3,
+    },
   },
 });
 

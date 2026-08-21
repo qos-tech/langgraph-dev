@@ -100,8 +100,10 @@ try {
     model: "vendor/model",
     prompt: "Return JSON",
     validate,
-    maxTokens: 321,
-    maxRetries: 0,
+    providerHints: {
+      maxOutputTokens: 321,
+      transportRetries: 0,
+    },
   });
 
   assert.deepEqual(nvidiaResult.data, { ok: true });
@@ -131,8 +133,10 @@ try {
     model: "sonnet",
     prompt: "Return JSON",
     validate,
-    maxTokens: 321,
-    maxRetries: 4,
+    providerHints: {
+      maxOutputTokens: 321,
+      transportRetries: 4,
+    },
   });
 
   assert.deepEqual(claudeResult.data, { ok: true });
@@ -197,6 +201,16 @@ try {
   assert.match(nvidiaSource, /extractJsonObject\(content\)/);
   assert.match(claudeSource, /"--output-format",\s*"json"/);
   assert.match(claudeSource, /structured_output/);
+
+  const contractsSource = await readFile(
+    new URL("./providers/contracts.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(contractsSource, /\bmaxTokens\?:/);
+  assert.doesNotMatch(contractsSource, /\bmaxRetries\?:/);
+  assert.match(contractsSource, /maxOutputTokens\?: number/);
+  assert.match(contractsSource, /transportRetries\?: number/);
 
   console.log("✅ H-ARCH-003 Step 1 execution-policy characterization passed.");
 } finally {
