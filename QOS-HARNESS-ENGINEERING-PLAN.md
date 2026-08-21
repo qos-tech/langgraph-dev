@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H0`
-**Current task:** `H0-001 — Step 3: Create Run Lifecycle Recorder`
-**Task status:** ✅ Accepted — Step 3
+**Current task:** `H0-001 — Step 4: Persist Run Record`
+**Task status:** ✅ Accepted — Step 4
 
 ---
 
@@ -6177,7 +6177,7 @@ product evidence exposes a concrete defect.
 ## H0-001 — Run Telemetry Foundation
 
 **Status:** 🚧 In progress
-**Current step:** Accepted — Step 3
+**Current step:** Accepted — Step 4
 **Release baseline:** `v0.1.0-alpha.4`
 
 ## Milestone objective
@@ -7082,4 +7082,326 @@ Persistence should receive a completed `RunTelemetry` value and must not own run
 lifecycle timing, ID creation, graph state, or provider instrumentation.
 
 **Decision:** proceed to Step 4 — Persist Run Record.
+
+## H0-001 Step 4 — Persist Run Record
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Persist one completed `RunTelemetry` record as deterministic JSON under:
+
+```text
+.runs/<run-id>.json
+```
+
+Step 4 introduces a dedicated persistence boundary.
+
+It does not yet wire persistence into the executable Harness lifecycle.
+
+### Architectural decision
+
+Create:
+
+```text
+src/telemetry/store.ts
+```
+
+with a small contract:
+
+```ts
+interface RunTelemetryStore {
+  save(telemetry: RunTelemetry): Promise<PersistedRunTelemetry>;
+}
+```
+
+and one filesystem implementation:
+
+```ts
+createJsonRunTelemetryStore(...)
+```
+
+The store receives an already-completed `RunTelemetry`.
+
+It does not:
+
+- generate the run ID;
+- read the clock;
+- calculate duration;
+- inspect `DevState`;
+- call providers;
+- decide whether the run succeeded.
+
+Those concerns remain owned by the lifecycle/runtime boundaries established in
+Steps 2–3.
+
+### Persistence location
+
+The JSON store writes to:
+
+```text
+<rootDirectory>/.runs/<run-id>.json
+```
+
+The production default root is:
+
+```text
+process.cwd()
+```
+
+Tests inject a temporary root directory.
+
+The store intentionally does **not** derive the output directory from
+`telemetry.repositoryPath`.
+
+Reason:
+
+`repositoryPath` is the repository being operated on. Writing Harness telemetry
+inside that target repository would create an unauthorized task-side file and
+could contaminate Git scope/diffs.
+
+Telemetry belongs to the Harness runtime workspace unless a later product
+decision explicitly configures another telemetry root.
+
+### Serialization
+
+Records are written as:
+
+```text
+JSON.stringify(record, null, 2) + newline
+```
+
+The persisted value is therefore human-readable, deterministic for a given
+object insertion order, and directly consumable by H0 benchmark/report tooling.
+
+Step 4 does not introduce a JSON schema parser or migration loader.
+
+### Collision policy
+
+Persistence uses exclusive file creation.
+
+If:
+
+```text
+.runs/<run-id>.json
+```
+
+already exists, `save(...)` fails instead of silently overwriting the previous
+run.
+
+The lifecycle recorder currently uses `crypto.randomUUID()` by default, so a
+collision indicates either an injected/test ID reuse or a serious lifecycle
+problem that should remain visible.
+
+### Path-safety policy
+
+Because `runId` becomes a filename, the filesystem store accepts only a
+conservative filename-safe identifier:
+
+```text
+A-Z
+a-z
+0-9
+.
+_
+-
+```
+
+with an alphanumeric first character.
+
+Path separators, traversal syntax, empty values, and other filename syntax are
+rejected before persistence.
+
+### Files
+
+Create:
+
+```text
+src/telemetry/store.ts
+src/test-run-telemetry-store.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/state.ts
+src/graph/*
+src/providers/*
+src/telemetry/contracts.ts
+src/telemetry/recorder.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- wire the store into `src/index.ts`;
+- automatically persist every Harness run;
+- add `.gitignore` without reviewing its current repository contents;
+- read/query run history;
+- add schema migrations;
+- add retention/cleanup;
+- overwrite existing run records;
+- persist target-repository telemetry inside `repositoryPath`;
+- instrument LLM calls;
+- calculate token cost;
+- add node timings;
+- add a database/dashboard;
+- add OpenTelemetry.
+
+### Deterministic test
+
+Create:
+
+```text
+src/test-run-telemetry-store.ts
+```
+
+using a temporary directory.
+
+It must prove:
+
+- `.runs/` is created recursively when needed;
+- one completed telemetry value is serialized to
+  `.runs/<run-id>.json`;
+- persisted JSON round-trips to the original telemetry value;
+- persisted JSON ends with a newline;
+- the store reports the persisted path;
+- an existing run file is not silently overwritten;
+- unsafe/path-traversal run IDs are rejected;
+- the test does not write to the repository's real `.runs/`;
+- the store requires no graph/provider dependency.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `src/telemetry/store.ts` exists.
+- [x] a provider-neutral `RunTelemetryStore` boundary exists.
+- [x] JSON filesystem implementation exists.
+- [x] completed telemetry is written under `.runs/<run-id>.json`.
+- [x] output root is injectable for deterministic tests.
+- [x] production root defaults to `process.cwd()`.
+- [x] target `repositoryPath` is not used as the persistence root.
+- [x] `.runs/` is created when absent.
+- [x] JSON output is human-readable and newline-terminated.
+- [x] existing run records are not silently overwritten.
+- [x] unsafe run IDs are rejected before filesystem persistence.
+- [x] store does not own lifecycle timing/ID generation.
+- [x] store remains independent from `DevState`, graph, and providers.
+- [x] no executable wiring is introduced yet.
+- [x] no new dependency is added.
+- [x] Steps 1–3 telemetry gates remain green.
+- [x] complete H-ARCH/alpha.4 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "feat(telemetry): persist run records"
+```
+
+### Exit condition
+
+Step 4 is complete when a completed `RunTelemetry` value can be safely and
+deterministically persisted under `.runs/<run-id>.json` without coupling
+persistence to graph state, provider execution, or the target repository.
+
+**Next:** Step 5 — Capture LLM Call Metrics.
+
+
+## H0-001 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic H0-001 Step 4 gate passed on the
+`v0.1.0-alpha.4` architectural-foundation baseline.
+
+Accepted outcome:
+
+- `src/telemetry/store.ts` defines the provider-neutral
+  `RunTelemetryStore` boundary;
+- `createJsonRunTelemetryStore(...)` persists completed run telemetry as
+  human-readable JSON;
+- persistence uses `<rootDirectory>/.runs/<run-id>.json`;
+- the production root defaults to `process.cwd()`;
+- deterministic tests inject a temporary root directory and therefore do not
+  create `.runs/` in the real development repository;
+- the target `telemetry.repositoryPath` is not used as the persistence root;
+- `.runs/` is created recursively when required;
+- JSON is newline-terminated;
+- existing run files are never silently overwritten;
+- unsafe/path-traversal run IDs are rejected before filesystem persistence;
+- persistence does not own run IDs, lifecycle timing, graph state, or provider
+  execution;
+- the executable Harness is still intentionally not wired to the store in
+  Step 4;
+- no new dependency was added;
+- Steps 1–3 telemetry gates remained green;
+- the complete H-ARCH/alpha.4 deterministic regression gate remained green.
+
+### Observed validation behavior
+
+Running the Step 4 test does not leave a `.runs/` directory in the project
+root.
+
+This is expected: the persistence test writes to a temporary directory, verifies
+the record, and removes the temporary directory afterward.
+
+Real Harness executions will only create `.runs/<run-id>.json` after the final
+H0-001 executable wiring is introduced.
+
+### Design consequence
+
+Step 5 may instrument portable LLM-call metrics without coupling that
+instrumentation to the filesystem store.
+
+The final H0-001 wiring should compose:
+
+```text
+lifecycle recorder
+  + LLM-call metrics
+  + completed graph state
+  + telemetry store
+```
+
+at the executable/application boundary.
+
+**Decision:** proceed to Step 5 — Capture LLM Call Metrics.
 
