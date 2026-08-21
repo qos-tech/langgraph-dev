@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** 📋 H0-002A planned
+**Task status:** ✅ H0-002A Step 1 accepted
 
 ---
 
@@ -10467,3 +10467,409 @@ Step 5 commit.
 
 **Decision:** proceed next to `H0-003 — Benchmark Runner` only after the Step 5
 commit and alpha.6 release are complete.
+
+## H0-002A Step 1 — Characterize Current Task Entry
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Freeze the current executable task-entry and one-run orchestration boundaries
+before defining `NormalizedHarnessTask` or extracting `runHarness(task)`.
+
+This is characterization only.
+
+No production source behavior changes are allowed.
+
+### Evidence from the current repository
+
+The executable path is currently concentrated in:
+
+```text
+src/index.ts
+```
+
+Current flow:
+
+```text
+process.env.TARGET_REPOSITORY
+        ↓
+hard-coded task string
+        ↓
+createLlmCallTelemetryCollector()
+        ↓
+createRunLifecycleRecorder()
+        ↓
+runRecorder.start({ task, repositoryPath })
+        ↓
+buildDevGraph(llmCallCollector)
+        ↓
+createJsonRunTelemetryStore()
+        ↓
+graph.invoke(initial DevState)
+        ↓
+buildRunTelemetryCompletion(result, collector.snapshot())
+        ↓
+activeRun.complete(...)
+        ↓
+telemetryStore.save(...)
+        ↓
+console output
+```
+
+### Current input boundary
+
+The current executable has two direct external inputs:
+
+```text
+TARGET_REPOSITORY
+MAX_PLANNING_ATTEMPTS
+```
+
+`TARGET_REPOSITORY` is required and is currently passed directly to:
+
+```text
+DevState.repositoryPath
+RunTelemetryStart.repositoryPath
+```
+
+The task itself is not externally supplied yet.
+
+It is a hard-coded string in `src/index.ts`.
+
+### Current graph initial-state boundary
+
+`src/index.ts` currently constructs the graph input directly with:
+
+```text
+task
+repositoryPath
+
+fileContents = {}
+fileSummaries = {}
+recentlyReadFiles = []
+
+filesChanged = []
+
+attempts = 0
+maxAttempts = 3
+
+planningAttempts = 0
+reviewAttempts = 0
+maxPlanningAttempts = env MAX_PLANNING_ATTEMPTS or 4
+
+failureReason = undefined
+status = pending
+```
+
+This initialization is application-run orchestration, not CLI parsing.
+
+It is therefore a candidate to move behind `runHarness(task)` in Step 4 after
+the normalized task contract is defined.
+
+### Current telemetry boundary
+
+`src/index.ts` currently owns the complete run telemetry lifecycle:
+
+```text
+collector creation
+run start
+graph execution
+terminal projection
+run completion
+JSON persistence
+telemetry path output
+```
+
+`StartRunTelemetryInput` currently requires:
+
+```text
+task
+repositoryPath
+```
+
+and `buildRunTelemetryCompletion(...)` rejects non-terminal graph states.
+
+This behavior must remain stable when application execution is extracted.
+
+### Repository identity finding
+
+H0-002 benchmark definitions already model repository identity as:
+
+```text
+repository.id
+repository.revision
+```
+
+while current runtime execution uses:
+
+```text
+repositoryPath
+```
+
+These are not the same concept.
+
+Step 1 records the distinction but does not reconcile it prematurely.
+
+Working direction for later steps:
+
+```text
+NormalizedHarnessTask
+  → repository identity
+
+execution context
+  → concrete repositoryPath/workspace
+```
+
+The exact handoff belongs to the Step 2 contract and later H0-003 workspace
+resolution design.
+
+### Architectural ownership finding
+
+Based on current code, likely future ownership is:
+
+```text
+CLI/manual adapter
+  → raw external input only
+
+Task Normalizer
+  → normalized task identity/request
+
+runHarness(...)
+  → collector
+  → lifecycle recorder
+  → graph construction/invocation
+  → initial DevState
+  → terminal telemetry projection
+  → telemetry persistence
+  → application result
+
+Graph/Core
+  → reasoning/orchestration only
+```
+
+This is a characterization finding, not permission to extract production code
+in Step 1.
+
+### Deterministic characterization test
+
+Create:
+
+```text
+src/test-h0-002a-task-entry-characterization.ts
+```
+
+The test inspects the current source boundaries without invoking a real LLM or
+creating run telemetry files.
+
+It protects:
+
+- `TARGET_REPOSITORY` as the current required concrete execution path;
+- current missing-repository failure;
+- the task remaining hard-coded in `src/index.ts`;
+- current one-run composition order;
+- exact graph initial-state defaults owned by `src/index.ts`;
+- current terminal telemetry completion/persistence sequence;
+- current telemetry start contract using `task + repositoryPath`;
+- terminal-state requirement for telemetry completion;
+- benchmark repository identity remaining `id + revision`;
+- absence of `runHarness(...)` and `NormalizedHarnessTask` during
+  characterization.
+
+### Files
+
+Create:
+
+```text
+src/test-h0-002a-task-entry-characterization.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/graph.ts
+src/state.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- define `NormalizedHarnessTask`;
+- define raw task-intake DTOs;
+- create `src/app/run-harness.ts`;
+- move orchestration out of `src/index.ts`;
+- parse CLI arguments;
+- externalize the hard-coded task;
+- change `TARGET_REPOSITORY`;
+- change telemetry contracts;
+- reconcile repository identity with workspace paths;
+- change graph initial-state defaults;
+- add benchmark runner behavior;
+- add HTTP/GitHub/Q-Flow adapters.
+
+### Acceptance criteria
+
+- [x] current required repository input is characterized.
+- [x] current hard-coded task ownership is characterized.
+- [x] current graph initial-state construction is characterized.
+- [x] current planning-attempt environment/default behavior is characterized.
+- [x] current LLM telemetry collector creation is characterized.
+- [x] current run lifecycle start is characterized.
+- [x] current graph construction/invocation order is characterized.
+- [x] current terminal telemetry projection is characterized.
+- [x] current telemetry persistence is characterized.
+- [x] current telemetry start contract is characterized.
+- [x] benchmark repository identity distinction is recorded.
+- [x] no `NormalizedHarnessTask` is introduced.
+- [x] no `runHarness(...)` is introduced.
+- [x] no production source changes.
+- [x] no real LLM/provider usage is consumed by the test.
+- [x] no telemetry file is written by the characterization test.
+- [x] no new runtime dependency is added.
+- [x] H0-002 benchmark regression remains green.
+- [x] H0-001 telemetry regression remains green.
+- [x] H-ARCH architecture/runtime regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract
+```
+
+### Full Step 1 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "test(intake): characterize current task entry"
+```
+
+### Exit condition
+
+Step 1 is complete when the current executable entry and one-run orchestration
+are deterministically characterized and the full regression gate passes.
+
+Only then may Step 2 define `NormalizedHarnessTask` from this evidence.
+
+## H0-002A Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The targeted H0-002A characterization gate and the complete alpha.6 regression
+gate passed in the development environment.
+
+Accepted evidence:
+
+```text
+current executable entry
+  → TARGET_REPOSITORY
+  → hard-coded task
+  → LLM telemetry collector
+  → run lifecycle recorder
+  → buildDevGraph(...)
+  → graph.invoke(initial DevState)
+  → terminal telemetry projection
+  → telemetry completion
+  → JSON telemetry persistence
+```
+
+The characterization confirms:
+
+- `src/index.ts` currently owns the concrete repository-path input;
+- the executable task text is still hard-coded in `src/index.ts`;
+- `MAX_PLANNING_ATTEMPTS` remains an executable/runtime input with default `4`;
+- graph initial-state defaults are created by the executable entry;
+- the LLM telemetry collector and run lifecycle are created before graph
+  execution;
+- terminal telemetry is projected only after graph completion;
+- telemetry is persisted after lifecycle completion;
+- `StartRunTelemetryInput` still uses `task + repositoryPath`;
+- benchmark repository identity remains `repository.id + repository.revision`;
+- runtime `repositoryPath` and normalized repository identity are distinct
+  concepts;
+- `NormalizedHarnessTask` does not exist yet;
+- `runHarness(...)` does not exist yet;
+- no production behavior changed in Step 1;
+- the characterization test consumes no real provider usage and writes no run
+  telemetry.
+
+### Step 2 evidence constraints
+
+`NormalizedHarnessTask` must be designed from these facts rather than by moving
+the current `repositoryPath` shape wholesale into the task domain.
+
+In particular:
+
+```text
+task identity
+  ≠ execution workspace
+
+repository.id / revision?
+  ≠ repositoryPath
+```
+
+Step 2 should define the normalized task contract only.
+
+It must not yet extract `runHarness(...)`, move telemetry lifecycle ownership,
+or resolve repository identity into a workspace.
+
+**Decision:** proceed to H0-002A Step 2 — Define Normalized Harness Task
+Contract.
