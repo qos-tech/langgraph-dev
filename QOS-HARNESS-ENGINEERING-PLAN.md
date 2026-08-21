@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** ✅ H0-002A Step 1 accepted
+**Task status:** ✅ H0-002A Step 2 accepted
 
 ---
 
@@ -10873,3 +10873,429 @@ or resolve repository identity into a workspace.
 
 **Decision:** proceed to H0-002A Step 2 — Define Normalized Harness Task
 Contract.
+
+## H0-002A Step 2 — Define Normalized Harness Task Contract
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Define the smallest integration-neutral task contract justified by Step 1
+evidence.
+
+This step defines data only.
+
+It does not normalize raw input, execute the Harness, resolve repositories, or
+move runtime behavior out of `src/index.ts`.
+
+### Evidence carried from Step 1
+
+Current runtime execution uses:
+
+```text
+task
+repositoryPath
+MAX_PLANNING_ATTEMPTS
+```
+
+Current benchmark definitions use machine-independent repository identity:
+
+```text
+repository.id
+repository.revision
+```
+
+Step 1 established that:
+
+```text
+repository identity
+  ≠
+concrete execution workspace
+```
+
+The normalized task contract must preserve that distinction.
+
+### New module
+
+Create:
+
+```text
+src/intake/contracts.ts
+```
+
+with:
+
+```text
+HARNESS_TASK_SCHEMA_VERSION
+HarnessTaskSource
+HarnessRepositoryRef
+NormalizedHarnessTask
+defineNormalizedHarnessTask(...)
+```
+
+### Contract
+
+Accepted Step 2 direction:
+
+```ts
+type NormalizedHarnessTask = Readonly<{
+  schemaVersion: 1;
+  id: string;
+  source: HarnessTaskSource;
+  repository: {
+    id: string;
+    revision?: string;
+  };
+  request: string;
+  constraints: readonly string[];
+  acceptanceCriteria: readonly string[];
+  metadata: Readonly<Record<string, unknown>>;
+}>;
+```
+
+### Source vocabulary
+
+Initial sources:
+
+```text
+manual
+cli
+benchmark
+self-improvement
+```
+
+This vocabulary is intentionally small.
+
+Future adapters may extend it only when concrete integration work requires it.
+
+Step 2 does not add:
+
+```text
+api
+github
+qflow
+webhook
+```
+
+because those adapters do not exist yet.
+
+### Repository identity
+
+`NormalizedHarnessTask.repository` contains identity only:
+
+```text
+id
+revision?
+```
+
+It does not contain:
+
+```text
+repositoryPath
+workspacePath
+checkoutPath
+worktreePath
+```
+
+Those belong to future execution/workspace resolution.
+
+### Request
+
+The human/business task is represented as:
+
+```text
+request: string
+```
+
+The contract does not introduce separate planner-specific fields.
+
+Semantic decomposition belongs to later planning stages.
+
+### Constraints and acceptance criteria
+
+Both are explicit arrays:
+
+```text
+constraints
+acceptanceCriteria
+```
+
+They are required in the normalized shape even when empty.
+
+Reason:
+
+The normalizer in Step 3 should produce one predictable application contract
+without optional-array branching throughout the Harness.
+
+### Metadata
+
+`metadata` is retained as an integration-neutral record:
+
+```text
+Readonly<Record<string, unknown>>
+```
+
+It may preserve source correlation data such as an external issue ID or
+benchmark ID.
+
+Core planning must not depend on metadata keys that belong to specific external
+systems.
+
+### Deliberately excluded fields
+
+Do not add:
+
+```text
+repositoryPath
+workspacePath
+provider
+model
+maxTokens
+providerHints
+MAX_PLANNING_ATTEMPTS
+graph node configuration
+telemetry path
+benchmark expectedOutcome
+validation commands
+GitHub/Q-Flow-specific fields
+```
+
+These belong to different boundaries.
+
+### Relationship to BenchmarkTask
+
+Step 2 does not replace or modify `BenchmarkTask`.
+
+Later H0-003 may adapt:
+
+```text
+BenchmarkTask
+      ↓
+NormalizedHarnessTask
+```
+
+but benchmark-specific fields such as:
+
+```text
+validationCommands
+expectedOutcome
+```
+
+remain benchmark-runner concerns and do not belong in the general Harness task.
+
+### Type helper
+
+`defineNormalizedHarnessTask(...)` is an identity/type-boundary helper only.
+
+It performs no runtime validation.
+
+Deterministic runtime normalization and validation belong to Step 3.
+
+### Files
+
+Create:
+
+```text
+src/intake/contracts.ts
+src/test-h0-002a-task-contract.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/state.ts
+src/graph.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- normalize raw task input;
+- validate blank strings at runtime;
+- create `runHarness(...)`;
+- move telemetry lifecycle ownership;
+- change CLI behavior;
+- externalize the current hard-coded task;
+- resolve repository identity to a path/worktree;
+- merge `BenchmarkTask` and `NormalizedHarnessTask`;
+- add API/GitHub/Q-Flow adapters;
+- add provider/runtime configuration to the task domain.
+
+### Acceptance criteria
+
+- [x] versioned normalized task contract exists.
+- [x] task ID is explicit.
+- [x] task source is explicit.
+- [x] initial source vocabulary is limited to current planned origins.
+- [x] repository identity is machine-independent.
+- [x] repository revision is optional for general tasks.
+- [x] concrete workspace path is absent from the normalized task.
+- [x] human/business request is explicit.
+- [x] constraints are explicit.
+- [x] acceptance criteria are explicit.
+- [x] metadata is integration-neutral.
+- [x] provider/model/runtime policy is absent from the contract.
+- [x] benchmark-specific execution fields are absent.
+- [x] type helper performs no runtime work.
+- [x] no production runtime behavior changes.
+- [x] no new runtime dependency is added.
+- [x] Step 1 characterization remains green.
+- [x] H0-002 benchmark regression remains green.
+- [x] H0-001/H-ARCH regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract
+```
+
+### Full Step 2 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(intake): define normalized harness task"
+```
+
+### Exit condition
+
+Step 2 is complete when the normalized task contract is explicit, integration-
+neutral, machine-independent, and protected by deterministic tests.
+
+Only then may Step 3 define runtime normalization/validation.
+
+## H0-002A Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The targeted H0-002A Step 2 gate and the complete alpha.6 regression gate
+passed in the development environment.
+
+Accepted normalized task contract:
+
+```text
+schemaVersion
+id
+source
+repository:
+  id
+  revision?
+request
+constraints[]
+acceptanceCriteria[]
+metadata
+```
+
+Accepted source vocabulary:
+
+```text
+manual
+cli
+benchmark
+self-improvement
+```
+
+Accepted boundary decisions:
+
+- repository identity remains machine-independent;
+- `repositoryPath` / workspace paths are not part of `NormalizedHarnessTask`;
+- repository revision is optional for general Harness tasks;
+- request text is preserved as one integration-neutral field;
+- constraints and acceptance criteria are explicit arrays in the normalized
+  shape;
+- metadata is an opaque integration-neutral record;
+- provider/model/provider-hint/runtime controls are not part of the task;
+- benchmark-specific `validationCommands` and `expectedOutcome` remain outside
+  the general Harness task;
+- `defineNormalizedHarnessTask(...)` is an identity/type helper only;
+- runtime validation/normalization remains deferred to Step 3;
+- `runHarness(...)` remains deferred to Step 4;
+- no production runtime behavior changed;
+- no new runtime dependency was added.
+
+### Step 3 evidence constraints
+
+Step 3 should introduce a raw/intake input boundary and deterministic
+normalization into the accepted `NormalizedHarnessTask` shape.
+
+Normalization may:
+
+```text
+trim required strings
+validate source
+normalize optional arrays/metadata
+reject blank list entries
+reject malformed repository identity
+```
+
+Normalization must not:
+
+```text
+call an LLM
+resolve repository identity to a workspace
+invent acceptance criteria
+select providers/models
+execute the Harness
+```
+
+**Decision:** proceed to H0-002A Step 3 — Define Deterministic Task Normalizer.
