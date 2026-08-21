@@ -2,6 +2,7 @@ import type { DevStateType } from "../state.js";
 
 import type { LlmRuntimeConfig } from "../providers/runtime-composition.js";
 import { resolveLlmRoleRuntime } from "../providers/runtime-composition.js";
+import { executeStructuredLlm } from "../providers/execution.js";
 
 import { inspectRepository } from "../repository/inspect.js";
 
@@ -75,15 +76,9 @@ function createPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
 
     const prompt = buildPlannerPrompt(state);
 
-    const result = await binding.provider.generateStructured({
-      model: binding.model,
+    const result = await executeStructuredLlm(binding, {
       prompt,
       validate: (value) => ExplorationSchema.parse(value),
-      ...(binding.providerHints
-        ? {
-            providerHints: binding.providerHints,
-          }
-        : {}),
     });
 
     const plan = normalizeRequests(state, result.data);
@@ -123,15 +118,9 @@ function createReviewPlanNode(llmRuntimeConfig: LlmRuntimeConfig) {
 
     const prompt = buildReviewerPrompt(state);
 
-    const result = await binding.provider.generateStructured({
-      model: binding.model,
+    const result = await executeStructuredLlm(binding, {
       prompt,
       validate: (value) => ReviewSchema.parse(value),
-      ...(binding.providerHints
-        ? {
-            providerHints: binding.providerHints,
-          }
-        : {}),
     });
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);
@@ -250,15 +239,9 @@ function createRefineNode(llmRuntimeConfig: LlmRuntimeConfig) {
 
     const prompt = buildRefinePrompt(state);
 
-    const result = await binding.provider.generateStructured({
-      model: binding.model,
+    const result = await executeStructuredLlm(binding, {
       prompt,
       validate: (value) => RefinedSchema.parse(value),
-      ...(binding.providerHints
-        ? {
-            providerHints: binding.providerHints,
-          }
-        : {}),
     });
 
     console.log(`⏱ ${result.elapsedSeconds.toFixed(1)}s`);

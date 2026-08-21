@@ -73,6 +73,7 @@ assert.doesNotMatch(nodesSource, /providers\/nvidia/);
 assert.doesNotMatch(nodesSource, /NVIDIA_PLANNER_MODEL/);
 assert.doesNotMatch(nodesSource, /NVIDIA_REVIEW_MODEL/);
 assert.match(nodesSource, /resolveLlmRole/);
-assert.match(nodesSource, /binding\.provider\.generateStructured/);
+assert.match(nodesSource, /executeStructuredLlm/);
+assert.doesNotMatch(nodesSource, /binding\.provider\.generateStructured/);
 
 console.log("✅ H-ARCH-002 Step 6 provider injection tests passed.");

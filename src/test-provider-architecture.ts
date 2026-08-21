@@ -12,6 +12,7 @@ const [
   contracts,
   roleComposition,
   runtimeComposition,
+  execution,
   defaultComposition,
 ] = await Promise.all([
   source("./graph/nodes.ts"),
@@ -20,6 +21,7 @@ const [
   source("./providers/contracts.ts"),
   source("./providers/role-composition.ts"),
   source("./providers/runtime-composition.ts"),
+  source("./providers/execution.ts"),
   source("./providers/default-composition.ts"),
 ]);
 
@@ -45,9 +47,12 @@ for (const [name, content] of [
 assert.match(builder, /buildDevGraph\(llmRuntimeConfig: LlmRuntimeConfig\)/);
 assert.match(builder, /createGraphNodes\(llmRuntimeConfig\)/);
 
-// Nodes may depend only on the neutral role-composition boundary.
+// Nodes resolve runtime roles and delegate provider invocation through the
+// portable execution boundary rather than calling adapters directly.
 assert.match(nodes, /providers\/runtime-composition/);
-assert.match(nodes, /binding\.provider\.generateStructured/);
+assert.match(nodes, /providers\/execution/);
+assert.match(nodes, /executeStructuredLlm/);
+assert.doesNotMatch(nodes, /binding\.provider\.generateStructured/);
 
 // Concrete default selection belongs at the outer compatibility/composition root.
 assert.match(
@@ -72,6 +77,11 @@ assert.doesNotMatch(
   runtimeComposition,
   /from\s+["'][^"']*(?:nvidia|claude-cli)[^"']*["']/,
 );
+assert.doesNotMatch(
+  execution,
+  /from\s+["'][^"']*(?:nvidia|claude-cli)[^"']*["']/,
+);
+assert.match(execution, /runtime\.provider\.generateStructured/);
 
 // Concrete provider selection is allowed in the default composition root.
 assert.match(defaultComposition, /from\s+["']\.\/nvidia\.js["']/);

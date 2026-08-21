@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Step 4: Introduce Runtime Role Configuration`
-**Task status:** In progress — Step 4
+**Current task:** `H-ARCH-003 — Step 5: Centralize Timeout / Retry Ownership`
+**Task status:** In progress — Step 5
 
 ---
 
@@ -3237,7 +3237,7 @@ Verified outcomes:
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 4 — Introduce Runtime Role Configuration
+**Current step:** Step 5 — Centralize Timeout / Retry Ownership
 **Release baseline:** `v0.1.0-alpha.2`
 
 ## Milestone objective
@@ -3930,7 +3930,7 @@ role-composition boundary.
 
 ## H-ARCH-003 Step 4 — Introduce Runtime Role Configuration
 
-**Status:** 🚧 In progress
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -4159,6 +4159,283 @@ capability-aware, and isolated from both graph nodes and concrete provider
 adapters.
 
 **Next:** Step 5 — Centralize Timeout / Retry Ownership.
+
+
+
+## H-ARCH-003 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The capability-aware runtime-composition gate passed in the development
+environment.
+
+Accepted outcome:
+
+```text
+default/user runtime config
+          ↓
+resolveLlmRoleRuntime(...)
+          ↓
+capability-aware effective provider hints
+          ↓
+graph nodes
+```
+
+Unsupported provider hints are removed before graph execution, and graph nodes
+remain provider-neutral.
+
+### Documentation correction
+
+The Step 4 source commit was completed after the full gate passed, but the
+uploaded engineering-plan snapshot still showed Step 4 as `In progress`.
+
+This record corrects that stale plan metadata before Step 5 work. It does not
+change Step 4 source behavior.
+
+**Decision:** Step 5 may centralize the provider-call execution boundary.
+
+---
+
+## H-ARCH-003 Step 5 — Centralize Timeout / Retry Ownership
+
+**Status:** 🚧 In progress
+
+### Objective
+
+Create one portable execution boundary for complete structured-LLM calls and
+make ownership of retry/timeout semantics explicit without inventing unsafe
+behavior.
+
+### Evidence-driven ownership decision
+
+There are three distinct retry concepts:
+
+```text
+transport retry
+  → adapter-specific
+  → NVIDIA HTTP/network retry today
+
+whole provider-call retry
+  → Harness execution concern
+  → not implemented yet
+
+task/graph retry
+  → orchestration concern
+  → existing planning/review state logic, outside this step
+```
+
+Timeout is also a Harness provider-call concern, but correct timeout behavior
+requires cancellation/lifecycle semantics from concrete providers.
+
+### Architectural decision
+
+Create:
+
+```text
+src/providers/execution.ts
+```
+
+with:
+
+```ts
+executeStructuredLlm(runtime, request)
+```
+
+Graph LLM nodes delegate all complete provider invocations through this
+boundary.
+
+Current execution semantics remain intentionally:
+
+```text
+one provider invocation
+no Harness-level timeout
+no Harness-level whole-call retry
+```
+
+### Why Step 5 does not implement timeout yet
+
+A `Promise.race()` timeout would only stop waiting.
+
+It would **not** reliably cancel:
+
+```text
+NVIDIA fetch
+Claude CLI child process
+```
+
+For Claude CLI this could leave an orphaned/continuing provider process and
+still consume quota after the Harness considers the call timed out.
+
+Therefore timeout implementation is blocked on Step 6 lifecycle/cancellation
+semantics.
+
+### Why Step 5 does not implement whole-call retry yet
+
+The current provider contract has no normalized error classification such as:
+
+```text
+retryable
+non-retryable
+cancelled
+timed-out
+```
+
+Retrying every provider exception would incorrectly retry validation errors,
+invalid structured output, authentication failures, or other deterministic
+failures.
+
+Therefore Step 5 establishes ownership and a single execution point, but does
+not add retries until evidence supports a safe retry decision.
+
+### Provider transport retries
+
+NVIDIA's existing:
+
+```text
+429 / 500 / 502 / 503 / 504
+network errors
+Retry-After
+backoff/jitter
+```
+
+remain inside the NVIDIA adapter.
+
+`providerHints.transportRetries` remains the adapter-owned transport retry
+control characterized in Steps 1–4.
+
+Claude CLI continues to advertise no transport-retry capability.
+
+### Graph dependency direction
+
+Before:
+
+```text
+graph node
+  → resolved runtime
+  → runtime.provider.generateStructured(...)
+```
+
+After:
+
+```text
+graph node
+  → resolved runtime
+  → executeStructuredLlm(...)
+  → runtime.provider.generateStructured(...)
+```
+
+Graph topology, prompts, schemas, routing, models, and provider transport
+behavior remain unchanged.
+
+### Files
+
+Create:
+
+```text
+src/providers/execution.ts
+src/test-llm-execution.ts
+```
+
+Modify:
+
+```text
+src/graph/nodes.ts
+src/test-provider-injection.ts
+src/test-provider-architecture.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/contracts.ts
+src/providers/runtime-composition.ts
+src/providers/default-composition.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+src/graph/build-dev-graph.ts
+src/graph.ts
+```
+
+### Non-goals
+
+Do not yet:
+
+- add `timeoutMs`;
+- use `Promise.race()` as fake cancellation;
+- add Harness whole-call retries;
+- move NVIDIA transport retry behavior;
+- add normalized provider error taxonomy;
+- add fallback between providers;
+- optimize Claude CLI startup;
+- redesign process lifecycle;
+- change graph/task retry semantics;
+- change models/prompts/routing.
+
+### Deterministic test
+
+`test:llm-execution` proves:
+
+- resolved model is forwarded;
+- effective provider hints are forwarded;
+- application prompt/validator are preserved;
+- exactly one provider invocation occurs;
+- provider result is returned unchanged;
+- provider errors propagate unchanged;
+- Harness does not silently add whole-call retries.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [ ] portable LLM execution boundary exists.
+- [ ] graph nodes no longer invoke provider adapters directly.
+- [ ] execution boundary imports no concrete provider.
+- [ ] transport retry remains provider-owned.
+- [ ] no Harness-level retry is accidentally introduced.
+- [ ] no fake timeout/cancellation behavior is introduced.
+- [ ] provider exceptions still propagate unchanged.
+- [ ] provider result/timing/usage behavior remains unchanged.
+- [ ] graph topology remains unchanged.
+- [ ] provider adapters remain unchanged.
+- [ ] architecture guard protects the new dependency direction.
+- [ ] full alpha.2 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "refactor(runtime): centralize LLM execution boundary"
+```
+
+### Exit condition
+
+Step 5 is complete when every graph LLM call crosses one portable execution
+boundary and retry/timeout ownership is explicit without unsafe behavior.
+
+**Next:** Step 6 — Provider Lifecycle / Process Policy.
+
+Step 6 must establish the cancellation/lifecycle evidence needed before a real
+portable timeout policy can be implemented.
 
 
 # Release Procedure — v0.1.0-alpha.2
