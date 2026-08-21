@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-002A — Task Intake Foundation`
-**Task status:** ✅ H0-002A Step 3 accepted
+**Task status:** ✅ H0-002A Step 4 accepted
 
 ---
 
@@ -11909,3 +11909,467 @@ Step 4 must not:
 
 **Decision:** proceed with Step 4 only after this architecture refinement is
 committed to the engineering plan.
+
+## H0-002A Step 4 — Extract Application Execution Boundary
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Create the reusable one-run application execution boundary agreed in the
+pre-Step-4 architecture refinement.
+
+This step extracts the execution composition into a new application module while
+leaving `src/index.ts` unchanged until the CLI/manual adapter migration in
+Step 5.
+
+### New application module
+
+Create:
+
+```text
+src/app/run-harness.ts
+```
+
+with the public application concepts:
+
+```text
+ResolvedWorkspace
+HarnessExecutionOptions
+RunHarnessRequest
+HarnessRunResult
+RunHarnessDependencies
+runHarness(...)
+```
+
+### Accepted request boundary
+
+```text
+RunHarnessRequest
+  task
+    → NormalizedHarnessTask
+
+  workspace
+    → repositoryPath
+
+  execution?
+    → maxPlanningAttempts?
+```
+
+This preserves the accepted distinction:
+
+```text
+task.repository
+  → machine-independent identity
+
+workspace.repositoryPath
+  → concrete local execution path
+```
+
+The application boundary must not derive one from the other.
+
+### Execution ownership
+
+`runHarness(...)` owns one run of:
+
+```text
+create LLM telemetry collector
+create run lifecycle recorder
+start telemetry lifecycle
+create telemetry store
+construct/invoke graph
+construct initial DevState
+project terminal telemetry
+complete telemetry lifecycle
+persist telemetry
+return state + telemetry + persisted telemetry reference
+```
+
+### Initial DevState compatibility
+
+Step 4 preserves the current executable defaults:
+
+```text
+fileContents = {}
+fileSummaries = {}
+recentlyReadFiles = []
+filesChanged = []
+
+attempts = 0
+maxAttempts = 3
+
+planningAttempts = 0
+reviewAttempts = 0
+maxPlanningAttempts = execution.maxPlanningAttempts ?? 4
+
+failureReason = undefined
+status = pending
+```
+
+Task text supplied to both `DevState.task` and telemetry remains:
+
+```text
+NormalizedHarnessTask.request
+```
+
+Concrete runtime path supplied to both `DevState.repositoryPath` and telemetry
+remains:
+
+```text
+ResolvedWorkspace.repositoryPath
+```
+
+### Dependency injection
+
+Step 4 introduces narrow dependency injection for deterministic application
+tests.
+
+Production defaults remain the existing real implementations:
+
+```text
+buildDevGraph
+createLlmCallTelemetryCollector
+createRunLifecycleRecorder
+createJsonRunTelemetryStore
+```
+
+Tests may replace:
+
+```text
+collector factory
+recorder factory
+telemetry-store factory
+graph invocation
+```
+
+This allows lifecycle/order/state verification without:
+
+```text
+real LLM/provider calls
+real `.runs` writes
+real repository inspection
+```
+
+Dependency injection is an application testability mechanism only.
+
+It must not add provider/model/runtime-policy fields to
+`NormalizedHarnessTask`.
+
+### Application result
+
+Return:
+
+```text
+state
+telemetry
+persistedTelemetry
+```
+
+The application layer does not print output.
+
+Console/CLI presentation remains an adapter concern.
+
+### Temporary duplication rule
+
+`src/index.ts` remains unchanged in Step 4.
+
+Therefore, for this one step only, the repository contains:
+
+```text
+existing executable one-run composition
++
+new reusable application one-run composition
+```
+
+This duplication is intentional and temporary.
+
+Step 5 must migrate the executable to the application boundary and remove the
+old composition from `src/index.ts`.
+
+### Files
+
+Create:
+
+```text
+src/app/run-harness.ts
+src/test-h0-002a-run-harness.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/index.ts
+src/intake/contracts.ts
+src/intake/normalize.ts
+src/state.ts
+src/graph.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- migrate `src/index.ts`;
+- parse CLI/manual task input;
+- derive repository identity from `repositoryPath`;
+- resolve repository identity into a workspace;
+- clone/checkout repositories;
+- add benchmark-runner execution;
+- change telemetry contracts;
+- add task ID/source/metadata to telemetry;
+- change provider/runtime composition;
+- add HTTP/GitHub/Q-Flow adapters;
+- change graph behavior.
+
+### Acceptance criteria
+
+- [x] reusable `runHarness(...)` application boundary exists.
+- [x] application request receives `NormalizedHarnessTask`.
+- [x] application request receives an explicit `ResolvedWorkspace`.
+- [x] repositoryPath remains outside normalized task identity.
+- [x] optional execution policy carries `maxPlanningAttempts`.
+- [x] default planning-attempt budget remains `4`.
+- [x] task request is forwarded unchanged to graph state.
+- [x] task request is forwarded unchanged to telemetry start.
+- [x] workspace repositoryPath is forwarded unchanged to graph state.
+- [x] workspace repositoryPath is forwarded unchanged to telemetry start.
+- [x] current initial DevState defaults are preserved.
+- [x] LLM telemetry collector is created before graph invocation.
+- [x] run lifecycle starts before graph invocation.
+- [x] telemetry store is created before graph invocation.
+- [x] graph invocation receives the run-scoped LLM telemetry sink.
+- [x] terminal telemetry is projected from graph result + collector snapshot.
+- [x] telemetry lifecycle completes after graph invocation.
+- [x] telemetry is persisted after lifecycle completion.
+- [x] application result returns graph state.
+- [x] application result returns completed telemetry.
+- [x] application result returns persisted telemetry reference.
+- [x] deterministic dependency injection prevents real provider use in tests.
+- [x] deterministic dependency injection prevents `.runs` writes in tests.
+- [x] `src/index.ts` remains unchanged.
+- [x] no repository identity is invented from local path.
+- [x] no new runtime dependency is added.
+- [x] Step 1-3 intake regression remains green.
+- [x] H0-002 benchmark regression remains green.
+- [x] H0-001/H-ARCH regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract
+```
+
+### Full Step 4 gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-002a-run-harness && \
+npm run test:h0-002a-task-normalizer && \
+npm run test:h0-002a-task-contract && \
+npm run test:h0-002a-task-entry-characterization && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-cases && \
+npm run test:benchmark-contract && \
+npm run test:run-telemetry-integration && \
+npm run test:llm-call-telemetry && \
+npm run test:run-telemetry-store && \
+npm run test:run-lifecycle-recorder && \
+npm run test:run-telemetry-contract && \
+npm run test:run-lifecycle-characterization && \
+npm run test:harch004-acceptance && \
+npm run test:architecture-public-boundaries && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(app): extract harness run boundary"
+```
+
+### Exit condition
+
+Step 4 is complete when one normalized task can execute against one explicit
+resolved workspace through a reusable, deterministic-testable application
+boundary while the current executable remains behaviorally untouched.
+
+Only then may Step 5 migrate CLI/manual intake and remove the old orchestration
+from `src/index.ts`.
+
+## H0-002A Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The targeted Step 4 gate and the complete alpha.6 regression gate passed in the
+development environment.
+
+Three implementation corrections were required during validation and are part
+of the accepted Step 4 result.
+
+### Correction 1 — graph input type
+
+The first implementation incorrectly typed the injected graph input as the
+fully materialized `DevStateType`.
+
+The current graph accepts a narrower initial input and materializes additional
+schema fields later.
+
+The accepted application boundary now uses an explicit `HarnessGraphInput`
+derived from the subset of `DevStateType` fields that `runHarness(...)`
+actually owns.
+
+This avoids unsafe casts and avoids coupling the application API to LangGraph's
+internal `CommandInstance` union.
+
+### Correction 2 — deterministic test result shape
+
+Deterministic graph doubles return the fully materialized `DevStateType`
+expected by telemetry completion.
+
+Optional graph-state fields are explicitly represented as `undefined` in the
+test doubles.
+
+No production graph behavior changed.
+
+### Correction 3 — lazy production graph import
+
+Importing the real graph eagerly also imported provider modules and required a
+real `NVIDIA_API_KEY` even when tests injected a deterministic `invokeGraph`
+double.
+
+The accepted implementation loads the real graph lazily only when the default
+production graph path is actually used.
+
+Therefore:
+
+```text
+injected deterministic graph
+  → no real graph import
+  → no provider initialization
+  → no provider API key required
+
+default production path
+  → import real graph
+  → existing provider/runtime composition
+```
+
+This is required for the Step 4 dependency-injection boundary to be genuinely
+provider-free in deterministic tests.
+
+### Accepted application execution flow
+
+```text
+RunHarnessRequest
+  task: NormalizedHarnessTask
+  workspace: ResolvedWorkspace
+  execution?: HarnessExecutionOptions
+        ↓
+create run-scoped LLM telemetry collector
+        ↓
+create/start run lifecycle recorder
+        ↓
+create telemetry store
+        ↓
+invoke graph with Harness-owned initial state
+        ↓
+terminal DevStateType
+        ↓
+build terminal telemetry completion
+        ↓
+complete lifecycle
+        ↓
+persist telemetry
+        ↓
+HarnessRunResult
+```
+
+Accepted guarantees:
+
+- normalized task identity remains separate from concrete workspace path;
+- `repositoryPath` is supplied only through `ResolvedWorkspace`;
+- task request is forwarded unchanged to graph state and telemetry;
+- workspace path is forwarded unchanged to graph state and telemetry;
+- current initial-state defaults are preserved;
+- default `maxPlanningAttempts` remains `4`;
+- execution may override `maxPlanningAttempts`;
+- telemetry collector is run-scoped;
+- lifecycle start occurs before graph invocation;
+- telemetry completion occurs after graph invocation;
+- persistence occurs after lifecycle completion;
+- application result returns terminal state, telemetry, and persistence
+  reference;
+- deterministic tests use no real provider;
+- deterministic tests require no provider API key;
+- deterministic tests write no `.runs` files;
+- `src/index.ts` remains unchanged in Step 4;
+- no repository identity is invented from a local path;
+- no new runtime dependency was added.
+
+### Step 5 evidence constraints
+
+Step 5 must now migrate the executable/manual entry onto the accepted
+application boundary.
+
+It must solve repository identity acquisition explicitly rather than deriving a
+false identity from `TARGET_REPOSITORY`.
+
+Required direction:
+
+```text
+raw executable/manual input
+  ↓
+repository identity acquisition
+  ↓
+normalizeHarnessTask(...)
+  ↓
+ResolvedWorkspace
+  ↓
+runHarness(...)
+```
+
+After Step 5, the old collector/recorder/graph/store orchestration must no
+longer remain duplicated in `src/index.ts`.
+
+**Decision:** proceed to H0-002A Step 5 — Introduce CLI / Manual Intake Adapter.
