@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-003 — Step 5: Centralize Timeout / Retry Ownership`
-**Task status:** Accepted — Step 5
+**Current task:** `H-ARCH-003 — Step 6: Provider Lifecycle / Process Policy`
+**Task status:** Accepted — Step 6
 
 ---
 
@@ -3237,7 +3237,7 @@ Verified outcomes:
 ## Status
 
 **Milestone:** In progress
-**Current step:** Step 5 — Centralize Timeout / Retry Ownership
+**Current step:** Step 6 — Provider Lifecycle / Process Policy
 **Release baseline:** `v0.1.0-alpha.2`
 
 ## Milestone objective
@@ -4476,6 +4476,279 @@ one provider invocation, preserves the provider result/error semantics, and
 does not introduce hidden retry or fake timeout behavior.
 
 **Decision:** proceed to Step 6 — Provider Lifecycle / Process Policy.
+
+
+## H-ARCH-003 Step 6 — Provider Lifecycle / Process Policy
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Establish real cooperative cancellation for both concrete providers so future
+portable timeout policy can stop underlying provider work instead of merely
+stopping the Harness await.
+
+### Evidence
+
+Current provider lifecycle differs:
+
+```text
+NVIDIA
+  → fetch request
+
+Claude CLI
+  → execFile child process
+```
+
+Step 5 deliberately rejected `Promise.race()` timeout because it would not
+guarantee cancellation of either underlying operation.
+
+### Architectural decision
+
+Add an optional portable cancellation signal to the structured request:
+
+```ts
+signal?: AbortSignal
+```
+
+This is not a provider hint.
+
+Cancellation is a complete-call lifecycle concern and therefore belongs to the
+portable request/execution path.
+
+Provider hints remain limited to provider-owned controls such as output-token
+limits and transport retries.
+
+### Execution boundary
+
+`executeStructuredLlm(...)` forwards the optional signal unchanged to the
+resolved provider.
+
+The execution boundary still does not create its own timeout in Step 6.
+
+### NVIDIA lifecycle policy
+
+The NVIDIA adapter propagates the signal through:
+
+```text
+generateStructured
+  → callNvidiaJson
+  → requestNvidia
+  → fetch
+```
+
+The same signal also covers:
+
+- transport retry loops;
+- retry backoff sleep;
+- GPT-OSS empty-content recovery.
+
+Once cancellation is observed, NVIDIA must not perform another transport retry.
+
+Existing 429/5xx/network retry behavior remains unchanged when no cancellation
+occurs.
+
+### Claude CLI lifecycle policy
+
+The Claude runner accepts optional execution options:
+
+```ts
+{
+  signal?: AbortSignal
+}
+```
+
+The default `execFile` runner wires the signal to the child process and uses:
+
+```text
+killSignal = SIGTERM
+```
+
+Abort therefore terminates the actual Claude CLI process rather than only
+rejecting an outer Harness promise.
+
+Existing injected test runners remain compatible because the options argument
+is optional.
+
+### Timeout policy
+
+Step 6 does **not** add `timeoutMs` or `AbortSignal.timeout()`.
+
+After Step 6, the architecture has the cancellation primitive required for a
+future timeout implementation.
+
+The Step 7 architecture review will decide whether timeout policy belongs in
+H-ARCH-003 finalization or should remain deferred to production hardening.
+
+### Files
+
+Create:
+
+```text
+src/test-provider-lifecycle.ts
+```
+
+Modify:
+
+```text
+src/providers/contracts.ts
+src/providers/execution.ts
+src/providers/nvidia.ts
+src/providers/claude-cli.ts
+src/test-claude-provider.ts
+src/test-provider-execution-policy-characterization.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/providers/runtime-composition.ts
+src/providers/default-composition.ts
+src/graph/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- add a timeout duration to runtime config;
+- add Harness whole-call retry;
+- add provider fallback;
+- add normalized error taxonomy;
+- change NVIDIA retry/backoff values;
+- change model defaults;
+- change prompts;
+- change graph topology/routing;
+- optimize Claude CLI startup.
+
+### Deterministic lifecycle test
+
+`test:provider-lifecycle` proves:
+
+- NVIDIA fetch receives the exact request signal;
+- aborting NVIDIA cancels the in-flight request;
+- NVIDIA does not retry after cancellation;
+- Claude provider forwards the exact signal to its runner;
+- aborting Claude cancels the in-flight runner operation;
+- the default Claude `execFile` runner terminates a local child process via
+  cooperative abort;
+- no real NVIDIA or Claude provider usage is consumed.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] `StructuredLlmRequest` supports optional cooperative cancellation.
+- [x] cancellation is distinct from provider hints.
+- [x] execution boundary forwards the cancellation signal.
+- [x] NVIDIA wires cancellation to real `fetch`.
+- [x] NVIDIA cancellation stops transport retry progression.
+- [x] NVIDIA retry backoff is abortable.
+- [x] GPT-OSS recovery receives the same cancellation signal.
+- [x] Claude runner accepts optional lifecycle execution options.
+- [x] Claude default process runner wires cancellation to `execFile`.
+- [x] Claude child process uses explicit `SIGTERM` cancellation policy.
+- [x] existing injected Claude runners remain source-compatible.
+- [x] no timeout duration/policy is introduced prematurely.
+- [x] no whole-call retry/fallback is introduced.
+- [x] provider lifecycle deterministic test passes.
+- [x] all previous regression gates remain green.
+
+### Commit
+
+```bash
+git commit -m "feat(runtime): add provider cancellation lifecycle"
+```
+
+### Exit condition
+
+Step 6 is complete when both concrete providers can cooperatively cancel their
+actual underlying work and the full deterministic regression gate passes.
+
+**Next:** Step 7 — Cross-Provider Acceptance / Architecture Review.
+
+
+## H-ARCH-003 Step 6 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 6 gate passed in the development environment.
+
+Validated outcomes:
+
+```text
+StructuredLlmRequest.signal
+  → executeStructuredLlm(...)
+  → concrete provider adapter
+```
+
+NVIDIA:
+
+```text
+signal
+  → generateStructured
+  → callNvidiaJson
+  → requestNvidia
+  → fetch
+
+signal also covers:
+  → retry backoff
+  → retry-loop cancellation
+  → GPT-OSS recovery request
+```
+
+Claude CLI:
+
+```text
+signal
+  → ClaudeCliProvider
+  → ClaudeCliRunner options
+  → execFile
+  → SIGTERM child-process cancellation
+```
+
+The deterministic lifecycle test proved:
+
+- NVIDIA receives the exact `AbortSignal`;
+- cancelling NVIDIA aborts the in-flight fetch;
+- NVIDIA does not continue transport retries after cancellation;
+- Claude receives the exact signal through the runner boundary;
+- cancelling Claude aborts the in-flight runner;
+- the default Claude runner terminates a real local child process;
+- no real NVIDIA or Claude usage is consumed by the lifecycle test.
+
+The complete regression gate also remained green, including execution,
+runtime-composition, capabilities, hints, provider architecture, mixed
+cross-provider composition, provider contracts, graph characterization, prompt
+characterization, and repository tooling.
+
+No `timeoutMs`, Harness whole-call retry, provider fallback, graph topology,
+prompt, or model-default behavior was introduced.
+
+**Decision:** proceed to Step 7 — Cross-Provider Acceptance / Architecture
+Review.
 
 # Release Procedure — v0.1.0-alpha.2
 

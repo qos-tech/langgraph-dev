@@ -188,15 +188,19 @@ try {
 
   assert.doesNotMatch(
     nvidiaSource,
-    /AbortSignal\.timeout|AbortController/,
+    /AbortSignal\.timeout/,
   );
   assert.doesNotMatch(
     claudeSource,
-    /\btimeout\s*:/,
+    /AbortSignal\.timeout|\btimeout\s*:/,
   );
 
+  assert.match(nvidiaSource, /signal/);
+  assert.match(nvidiaSource, /fetch\(/);
+
   assert.match(claudeSource, /execFile\(/);
-  assert.match(claudeSource, /await this\.runner\(this\.binary, args\)/);
+  assert.match(claudeSource, /killSignal:\s*"SIGTERM"/);
+  assert.match(claudeSource, /request\.signal/);
 
   assert.match(nvidiaSource, /extractJsonObject\(content\)/);
   assert.match(claudeSource, /"--output-format",\s*"json"/);

@@ -28,9 +28,14 @@ export type ClaudeCliExecution = {
   stderr: string;
 };
 
+export type ClaudeCliExecutionOptions = Readonly<{
+  signal?: AbortSignal;
+}>;
+
 export type ClaudeCliRunner = (
   command: string,
   args: readonly string[],
+  options?: ClaudeCliExecutionOptions,
 ) => Promise<ClaudeCliExecution>;
 
 export type ClaudeCliProviderOptions = {
@@ -40,9 +45,10 @@ export type ClaudeCliProviderOptions = {
 
 const DEFAULT_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
 
-function runClaudeProcess(
+export function runClaudeProcess(
   command: string,
   args: readonly string[],
+  options: ClaudeCliExecutionOptions = {},
 ): Promise<ClaudeCliExecution> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -51,9 +57,20 @@ function runClaudeProcess(
       {
         encoding: "utf8",
         maxBuffer: DEFAULT_MAX_BUFFER_BYTES,
+        killSignal: "SIGTERM",
+        ...(options.signal
+          ? {
+              signal: options.signal,
+            }
+          : {}),
       },
       (error, stdout, stderr) => {
         if (error) {
+          if (options.signal?.aborted && options.signal.reason instanceof Error) {
+            reject(options.signal.reason);
+            return;
+          }
+
           reject(
             new Error(
               [
@@ -149,7 +166,15 @@ export class ClaudeCliProvider
       "--disable-slash-commands",
     ] as const;
 
-    const execution = await this.runner(this.binary, args);
+    const execution = await this.runner(
+      this.binary,
+      args,
+      request.signal
+        ? {
+            signal: request.signal,
+          }
+        : undefined,
+    );
     const elapsedSeconds = (performance.now() - startedAt) / 1000;
     const envelope = parseClaudeEnvelope(execution.stdout);
 

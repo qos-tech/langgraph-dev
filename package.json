@@ -25,7 +25,8 @@
     "test:provider-capabilities": "tsx src/test-provider-capabilities.ts",
     "test:provider-hints": "tsx src/test-provider-hints.ts",
     "test:runtime-composition": "tsx src/test-runtime-composition.ts",
-    "test:llm-execution": "tsx src/test-llm-execution.ts"
+    "test:llm-execution": "tsx src/test-llm-execution.ts",
+    "test:provider-lifecycle": "tsx src/test-provider-lifecycle.ts"
   },
   "keywords": [],
   "author": "",

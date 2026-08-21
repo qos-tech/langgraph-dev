@@ -51,6 +51,12 @@ type NvidiaCallOptions = {
    * chamada inicial.
    */
   maxRetries?: number;
+
+  /**
+   * Cancels the complete NVIDIA provider call, including retry backoff and
+   * GPT-OSS recovery requests.
+   */
+  signal?: AbortSignal;
 };
 
 /**
@@ -120,9 +126,44 @@ function modelExtraBody(model: string): Record<string, unknown> {
  * ============================================================
  */
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+function abortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) {
+    return signal.reason;
+  }
+
+  const error = new Error("NVIDIA request aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw abortReason(signal);
+  }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    throwIfAborted(signal);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const onAbort = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+
+      reject(abortReason(signal as AbortSignal));
+    };
+
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    signal?.addEventListener("abort", onAbort, {
+      once: true,
+    });
   });
 }
 
@@ -179,6 +220,7 @@ async function requestNvidia(
   prompt: string,
   maxTokens: number,
   maxRetries: number,
+  signal?: AbortSignal,
 ): Promise<NvidiaResponse> {
   const requestBody: Record<string, unknown> = {
     model,
@@ -205,6 +247,8 @@ async function requestNvidia(
   let lastStatus: number | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    throwIfAborted(signal);
+
     let response: Response;
 
     try {
@@ -220,8 +264,18 @@ async function requestNvidia(
         },
 
         body: JSON.stringify(requestBody),
+
+        ...(signal
+          ? {
+              signal,
+            }
+          : {}),
       });
     } catch (error) {
+      if (signal?.aborted) {
+        throw abortReason(signal);
+      }
+
       if (attempt >= maxRetries) {
         throw new Error(
           [
@@ -238,7 +292,7 @@ async function requestNvidia(
         `⏳ NVIDIA network error; retry ${attempt + 1}/${maxRetries} em ${(waitMs / 1000).toFixed(1)}s`,
       );
 
-      await sleep(waitMs);
+      await sleep(waitMs, signal);
 
       continue;
     }
@@ -288,7 +342,7 @@ async function requestNvidia(
       `⏳ NVIDIA HTTP ${response.status}; retry ${attempt + 1}/${maxRetries} em ${(waitMs / 1000).toFixed(1)}s`,
     );
 
-    await sleep(waitMs);
+    await sleep(waitMs, signal);
   }
 
   throw new Error(
@@ -330,6 +384,7 @@ async function retryEmptyGptOssContent(
   originalPrompt: string,
   originalMaxTokens: number,
   maxRetries: number,
+  signal?: AbortSignal,
 ): Promise<NvidiaResponse> {
   const recoveryPrompt = `
 ${originalPrompt}
@@ -353,7 +408,13 @@ Agora:
     `↻ GPT-OSS retornou content vazio. Fazendo 1 retry de recuperação com max_tokens=${recoveryMaxTokens}.`,
   );
 
-  return requestNvidia(model, recoveryPrompt, recoveryMaxTokens, maxRetries);
+  return requestNvidia(
+    model,
+    recoveryPrompt,
+    recoveryMaxTokens,
+    maxRetries,
+    signal,
+  );
 }
 
 /**
@@ -374,7 +435,15 @@ export async function callNvidiaJson<T>(
 
   const maxRetries = options?.maxRetries ?? 6;
 
-  let payload = await requestNvidia(model, prompt, maxTokens, maxRetries);
+  const signal = options?.signal;
+
+  let payload = await requestNvidia(
+    model,
+    prompt,
+    maxTokens,
+    maxRetries,
+    signal,
+  );
 
   let message = payload.choices?.[0]?.message;
 
@@ -395,6 +464,7 @@ export async function callNvidiaJson<T>(
         prompt,
         maxTokens,
         maxRetries,
+        signal,
       );
 
       message = payload.choices?.[0]?.message;
@@ -502,6 +572,11 @@ export class NvidiaProvider implements CapabilityAwareStructuredLlmProvider {
       ...(request.providerHints?.transportRetries !== undefined
         ? {
             maxRetries: request.providerHints.transportRetries,
+          }
+        : {}),
+      ...(request.signal
+        ? {
+            signal: request.signal,
           }
         : {}),
     };

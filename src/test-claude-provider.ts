@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 
-import type { ClaudeCliRunner } from "./providers/claude-cli.js";
+import type {
+  ClaudeCliExecutionOptions,
+  ClaudeCliRunner,
+} from "./providers/claude-cli.js";
 import { ClaudeCliProvider } from "./providers/claude-cli.js";
 
 type CapturedCall = {
   command: string;
   args: readonly string[];
+  options?: ClaudeCliExecutionOptions;
 };
 
 const calls: CapturedCall[] = [];
@@ -19,8 +23,12 @@ let stdout = JSON.stringify({
   },
 });
 
-const runner: ClaudeCliRunner = async (command, args) => {
-  calls.push({ command, args: [...args] });
+const runner: ClaudeCliRunner = async (command, args, options) => {
+  calls.push({
+    command,
+    args: [...args],
+    ...(options ? { options } : {}),
+  });
   return { stdout, stderr: "" };
 };
 
@@ -29,10 +37,13 @@ const provider = new ClaudeCliProvider({
   runner,
 });
 
+const controller = new AbortController();
+
 const base = await provider.generateStructured({
   model: "sonnet",
   prompt: "Return JSON",
   validate: (value) => value as { ok: boolean },
+  signal: controller.signal,
   providerHints: {
     maxOutputTokens: 999,
     transportRetries: 4,
@@ -48,6 +59,7 @@ assert.deepEqual(base.usage, {
 
 assert.equal(calls.length, 1);
 assert.equal(calls[0]?.command, "/test/bin/claude");
+assert.equal(calls[0]?.options?.signal, controller.signal);
 
 const args = calls[0]?.args ?? [];
 assert.deepEqual(args, [

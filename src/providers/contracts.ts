@@ -31,6 +31,14 @@ export type StructuredLlmRequest<T> = {
   validate: (value: unknown) => T;
 
   /**
+   * Portable cooperative cancellation signal for the complete provider call.
+   *
+   * Concrete adapters must wire this signal to their real transport/process
+   * lifecycle rather than only stop awaiting the result.
+   */
+  signal?: AbortSignal;
+
+  /**
    * Optional provider execution hints.
    *
    * These are not portable guarantees. Consumers can inspect provider
