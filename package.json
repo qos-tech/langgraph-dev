@@ -28,7 +28,8 @@
     "test:llm-execution": "tsx src/test-llm-execution.ts",
     "test:provider-lifecycle": "tsx src/test-provider-lifecycle.ts",
     "test:harch003-acceptance": "tsx src/test-harch003-acceptance.ts",
-    "test:architecture-boundaries-characterization": "tsx src/test-architecture-boundaries-characterization.ts"
+    "test:architecture-boundaries-characterization": "tsx src/test-architecture-boundaries-characterization.ts",
+    "test:architecture-dependencies": "tsx src/test-architecture-dependencies.ts"
   },
   "keywords": [],
   "author": "",

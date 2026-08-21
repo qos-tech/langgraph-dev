@@ -3,8 +3,8 @@
 **Status:** Active
 **Version:** 2.0
 **Current milestone:** `H-ARCH`
-**Current task:** `H-ARCH-004 — Step 1: Characterize Current Dependency Boundaries`
-**Task status:** ✅ Accepted — Step 1
+**Current task:** `H-ARCH-004 — Step 2: Add Module Dependency / Cycle Guards`
+**Task status:** ✅ Accepted — Step 2
 
 ---
 
@@ -5142,7 +5142,7 @@ After publication, development continues with:
 ## Status
 
 **Milestone:** 🚧 In progress
-**Current step:** Accepted — Step 1
+**Current step:** Accepted — Step 2
 **Release baseline:** `v0.1.0-alpha.3`
 
 ## Milestone objective
@@ -5416,4 +5416,251 @@ Accepted outcome:
 - all alpha.3 deterministic regression gates remained green.
 
 **Decision:** proceed to Step 2 — Add Module Dependency / Cycle Guards.
+
+## H-ARCH-004 Step 2 — Add Module Dependency / Cycle Guards
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Promote the Step 1 import characterization into generalized architectural
+guards that protect production-module dependency direction and detect circular
+dependencies automatically.
+
+This remains architecture-test work.
+
+No production source changes are planned.
+
+### Evidence from Step 1
+
+Step 1 proved the current dependency shape and confirmed these high-value
+invariants:
+
+```text
+graph/* ─X→ graph.ts
+graph/* ─X→ concrete provider adapters
+runtime-composition ─X→ concrete provider adapters
+execution ─X→ concrete provider adapters
+```
+
+It also confirmed that the temporary graph cycle from H-ARCH-001 no longer
+exists.
+
+Step 2 generalizes those point observations so future files cannot silently
+reintroduce the same classes of defects.
+
+### Architectural test strategy
+
+Create:
+
+```text
+src/test-architecture-dependencies.ts
+```
+
+The test scans production TypeScript modules under `src/`.
+
+Files named `test-*.ts` are intentionally excluded from the production
+dependency graph.
+
+For production modules it:
+
+1. extracts static relative imports and re-exports;
+2. extracts literal dynamic imports;
+3. resolves local `.js` specifiers back to repository `.ts` source modules;
+4. fails on unresolved local production dependencies;
+5. builds an in-memory directed dependency graph;
+6. detects circular dependencies deterministically;
+7. applies a small set of evidence-backed boundary rules.
+
+No external architecture package is added.
+
+### Step 2 boundary rules
+
+#### Rule 1 — no production cycles
+
+The production source dependency graph must be acyclic.
+
+This protects against regressions like the earlier transitional shape:
+
+```text
+graph.ts
+  → graph/build-dev-graph.ts
+  → graph.ts
+```
+
+#### Rule 2 — graph internals do not depend on `graph.ts`
+
+`src/graph.ts` is an outer compatibility/default-composition boundary.
+
+Modules under:
+
+```text
+src/graph/*
+```
+
+must not import back into it.
+
+#### Rule 3 — graph internals remain provider-neutral
+
+Modules under `src/graph/*` must not directly import:
+
+```text
+providers/nvidia.ts
+providers/claude-cli.ts
+providers/default-composition.ts
+```
+
+Graph runtime configuration must continue arriving through injected neutral
+contracts.
+
+#### Rule 4 — provider runtime core remains neutral
+
+These modules:
+
+```text
+providers/contracts.ts
+providers/execution.ts
+providers/role-composition.ts
+providers/runtime-composition.ts
+```
+
+must not depend on concrete provider adapters or the concrete default
+composition root.
+
+#### Rule 5 — graph builder remains injectable
+
+`graph/build-dev-graph.ts` must not select `default-composition.ts`.
+
+Concrete runtime selection stays outside the graph builder.
+
+### Why the rule set stays small
+
+H-ARCH-004 is not permission to encode every folder as a rigid Clean
+Architecture layer.
+
+Rules are added only where earlier milestones produced concrete dependency
+evidence.
+
+Repository Intelligence, Context Engine, telemetry and implementation agents
+will add new modules later. Step 2 should protect established boundaries without
+blocking those roadmap changes through speculative restrictions.
+
+### Files
+
+Create:
+
+```text
+src/test-architecture-dependencies.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production source.
+
+### Non-goals
+
+Do not:
+
+- add `madge`, `dependency-cruiser`, ESLint architecture plugins or another dependency;
+- reorganize folders;
+- move production modules;
+- define a generic domain/application/infrastructure framework;
+- ban all cross-folder imports;
+- redesign `graph.ts`;
+- remove compatibility exports;
+- change provider composition;
+- change runtime behavior;
+- add Repository Intelligence;
+- add telemetry;
+- add Context Engine;
+- change prompts/models/routing.
+
+### Deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:architecture-dependencies && \
+npm run test:architecture-boundaries-characterization && \
+npm run test:harch003-acceptance && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:runtime-composition && \
+npm run test:provider-hints && \
+npm run test:provider-capabilities && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-architecture && \
+npm run test:cross-provider && \
+npm run test:claude-provider && \
+npm run test:provider-composition && \
+npm run test:provider-injection && \
+npm run test:provider-contract && \
+npm run test:provider-characterization && \
+npm run test:prompt-characterization && \
+npm run test:graph-characterization && \
+npm run test:tools
+```
+
+### Acceptance criteria
+
+- [x] generalized production dependency graph is built deterministically.
+- [x] relative local imports/re-exports are resolved to source modules.
+- [x] literal dynamic local imports are included.
+- [x] unresolved local production dependencies fail the guard.
+- [x] production circular dependencies fail the guard.
+- [x] graph internals cannot depend on `graph.ts`.
+- [x] graph internals cannot select concrete provider adapters.
+- [x] graph internals cannot select default concrete composition.
+- [x] provider-neutral runtime core cannot depend on concrete adapters.
+- [x] graph builder cannot select default concrete composition.
+- [x] no production source changes.
+- [x] no new dependency is added.
+- [x] Step 1 characterization remains green.
+- [x] full alpha.3 regression gate remains green.
+
+### Commit
+
+```bash
+git commit -m "test(architecture): guard module dependencies and cycles"
+```
+
+### Exit condition
+
+Step 2 is complete when the production dependency graph is acyclic, the
+evidence-backed boundary rules are enforced automatically, and the full
+deterministic regression gate passes.
+
+**Next:** Step 3 — Protect Composition and Public Boundaries.
+
+
+## H-ARCH-004 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The full deterministic Step 2 gate passed in the development environment.
+
+Accepted outcome:
+
+- the production TypeScript dependency graph is built deterministically;
+- local relative imports/re-exports are resolved back to source modules;
+- literal dynamic local imports are included;
+- unresolved local production dependencies fail the guard;
+- production circular dependencies fail the guard;
+- graph internals cannot depend back on `graph.ts`;
+- graph internals cannot select NVIDIA, Claude CLI, or default concrete composition;
+- the provider-neutral runtime core cannot depend on concrete adapters;
+- the graph builder remains injectable and cannot select the default composition;
+- Step 1 dependency characterization remains green;
+- no production source changed;
+- no new dependency was added;
+- the complete alpha.3 deterministic regression gate remained green.
+
+The Step 2 rule set intentionally remains small and evidence-backed rather than
+turning the current folder structure into a speculative global layering system.
+
+**Decision:** proceed to Step 3 — Protect Composition and Public Boundaries.
 
