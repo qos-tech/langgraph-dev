@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 6 accepted
+**Task status:** ✅ H0-003 Step 7 accepted
 
 ---
 
@@ -8358,6 +8358,675 @@ humanInterventionRequired
 ```
 
 from accepted execution evidence without changing acceptance semantics.
+
+## H0-003 Step 7 — Benchmark Observation Derivation
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Derive the existing H0-002 `BenchmarkRunObservation` from accepted H0-003
+execution evidence without changing benchmark acceptance semantics.
+
+The target contract already exists:
+
+```ts
+type BenchmarkRunObservation = Readonly<{
+  finalOutcome: BenchmarkExpectedOutcome;
+  filesChanged: readonly string[];
+  validationPassed: boolean;
+  humanInterventionRequired: boolean;
+}>;
+```
+
+Step 7 must populate those four fields deterministically.
+
+### Source evidence
+
+Current Harness state exposes the final planning outcome explicitly:
+
+```text
+state.refinedPlan.outcome
+  → changes_required
+  → already_satisfied
+  → blocked
+```
+
+Current graph behavior is important:
+
+```text
+changes_required / already_satisfied
+  → valid plan gate
+  → report
+  → state.status = completed
+  → failureReason = undefined
+
+blocked
+  → plan gate copies blockingUnknowns into failureReason
+  → failed route
+  → state.status = failed
+  → refinedPlan.outcome remains blocked
+```
+
+Therefore:
+
+```text
+telemetry.finalStatus
+```
+
+must not determine benchmark outcome.
+
+In particular:
+
+```text
+blocked
+```
+
+is a legitimate benchmark outcome even though the current graph terminates with:
+
+```text
+status = failed
+```
+
+### `finalOutcome` derivation
+
+Preferred deterministic rule:
+
+```text
+if refinedPlan is absent
+  → observation cannot be derived
+
+if refinedPlan.outcome = blocked
+  and state.status = failed
+  and failureReason is present
+  → finalOutcome = blocked
+
+if refinedPlan.outcome = already_satisfied
+  and state.status = completed
+  and failureReason is absent
+  → finalOutcome = already_satisfied
+
+if refinedPlan.outcome = changes_required
+  and state.status = completed
+  and failureReason is absent
+  → finalOutcome = changes_required
+
+otherwise
+  → observation cannot be derived
+```
+
+This prevents malformed/failed plan-gate states from being scored as successful
+benchmark outcomes merely because a `refinedPlan` object exists.
+
+Step 7 should introduce a narrow deterministic derivation error rather than
+fabricating an outcome when terminal state evidence is inconsistent.
+
+### `filesChanged` derivation
+
+Do not trust LLM claims.
+
+Do not use `state.filesChanged` as the primary benchmark source in H0-003.
+
+Current application initialization sets:
+
+```text
+filesChanged = []
+```
+
+and the current planning graph does not deterministically populate it.
+
+Step 7 must derive changed files from the isolated Git workspace before cleanup.
+
+Preferred evidence:
+
+```text
+git status --porcelain
+```
+
+or another deterministic Git query that can represent:
+
+```text
+modified
+added/untracked
+deleted
+renamed
+```
+
+The resulting observation should expose repository-relative paths only.
+
+The Git evidence collector must:
+
+```text
+run inside / against the resolved workspace
+not change process cwd
+not use LLM output
+not mutate repository state
+not require network
+```
+
+Exact porcelain parsing must be locked by deterministic tests.
+
+### `validationPassed` derivation
+
+Step 6 already established:
+
+```text
+BenchmarkValidationResult.passed
+```
+
+Therefore:
+
+```text
+validationPassed
+  ← validationResult.passed
+```
+
+No validation command may be re-executed during observation derivation.
+
+### `humanInterventionRequired` semantics
+
+This field is operational, not semantic.
+
+A benchmark concluding:
+
+```text
+blocked
+```
+
+does **not** by itself mean that a human intervened in the run.
+
+This distinction is required by the existing H0-002 acceptance evaluator:
+
+```text
+if humanInterventionRequired
+  → human_intervention_required failure
+```
+
+If Step 7 mapped:
+
+```text
+blocked → humanInterventionRequired = true
+```
+
+then the fixed B05 benchmark, whose expected outcome is `blocked`, could never
+be accepted.
+
+Therefore:
+
+```text
+humanInterventionRequired
+```
+
+must represent an actual external/manual intervention requirement in the runner
+lifecycle.
+
+The current H0-003 automated path has no manual-intervention mechanism.
+
+For the current runner baseline:
+
+```text
+humanInterventionRequired = false
+```
+
+must be supplied/recorded explicitly by deterministic runner evidence.
+
+Do not infer it from:
+
+```text
+finalOutcome
+failureReason
+status
+blockingUnknowns
+```
+
+A future interactive runner may add a real intervention signal, but that is not
+part of Step 7.
+
+### Preferred observation input
+
+Introduce a narrow evidence input rather than passing arbitrary benchmark state.
+
+Preferred conceptual shape:
+
+```ts
+type BenchmarkObservationEvidence = Readonly<{
+  harnessResult: HarnessRunResult;
+  filesChanged: readonly string[];
+  validation: BenchmarkValidationResult;
+  humanInterventionRequired: boolean;
+}>;
+```
+
+Then:
+
+```ts
+deriveBenchmarkRunObservation(
+  evidence: BenchmarkObservationEvidence,
+): BenchmarkRunObservation
+```
+
+The exact name may be refined by implementation evidence.
+
+### Git changed-files collector
+
+Preferred new infrastructure:
+
+```text
+src/benchmarks/changed-files.ts
+```
+
+with a narrow API such as:
+
+```ts
+collectBenchmarkChangedFiles(
+  repositoryPath: string,
+): Promise<readonly string[]>
+```
+
+It should use the system Git CLI with explicit argument arrays.
+
+Do not reuse the worktree resolver's private Git implementation by creating
+cross-layer coupling.
+
+A very small shared Git runner abstraction may be extracted only if source
+evidence shows duplication is becoming harmful; structural refactor must remain
+separate from behavior.
+
+### Observation derivation module
+
+Preferred file:
+
+```text
+src/benchmarks/observation.ts
+```
+
+This module should remain pure except for receiving already-collected evidence.
+
+It must not:
+
+```text
+run Git
+run validation commands
+run Harness
+call providers
+evaluate benchmark acceptance
+```
+
+### Deterministic tests
+
+Preferred tests:
+
+```text
+src/test-h0-003-benchmark-changed-files.ts
+src/test-h0-003-benchmark-observation.ts
+```
+
+The changed-files test must use a temporary local Git fixture and prove:
+
+```text
+clean workspace → []
+modified tracked file → relative path
+untracked file → relative path
+deleted file → relative path
+renamed file → deterministic repository-relative representation
+no process cwd mutation
+no repository mutation from collection
+no network
+```
+
+The observation test must prove:
+
+```text
+completed + changes_required → changes_required
+completed + already_satisfied → already_satisfied
+failed + valid blocked refined plan → blocked
+
+missing refinedPlan → derivation error
+failed changes_required → derivation error
+failed already_satisfied → derivation error
+completed blocked → derivation error
+failureReason on completed success outcome → derivation error
+
+filesChanged passes through deterministic Git evidence
+validationPassed comes only from validation result
+humanInterventionRequired passes through explicit runner evidence
+blocked does not automatically imply human intervention
+acceptance evaluator is not called
+```
+
+### Composition boundary
+
+Step 7 may add derivation/collection modules independently.
+
+Do not yet redesign `runBenchmark(...)` if doing so would mix:
+
+```text
+execution
+validation
+changed-file collection
+observation
+acceptance
+```
+
+into one large behavioral patch.
+
+Prefer accepting observation derivation first.
+
+Full runner composition belongs to the next H0-003 slice.
+
+### Files
+
+Preferred create:
+
+```text
+src/benchmarks/changed-files.ts
+src/benchmarks/observation.ts
+src/test-h0-003-benchmark-changed-files.ts
+src/test-h0-003-benchmark-observation.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/acceptance.ts
+src/benchmarks/cases.ts
+src/benchmarks/contracts.ts
+src/benchmarks/task-adapter.ts
+src/benchmarks/git-worktree-workspace.ts
+src/benchmarks/validation.ts
+src/intake/*
+src/app/run-harness.ts
+src/state.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+```
+
+unless deterministic implementation evidence exposes a concrete pre-existing
+contract defect.
+
+### Non-goals
+
+Do not yet:
+
+- change H0-002 acceptance semantics;
+- change B01-B05 expected outcomes;
+- make `blocked` imply manual intervention;
+- infer outcome from telemetry `completed | failed`;
+- trust LLM-provided changed-file claims;
+- execute validation commands again;
+- invoke `evaluateBenchmarkAcceptance(...)`;
+- run B01-B05 end-to-end;
+- create comparison reports;
+- alter provider/model behavior;
+- change graph routing;
+- change refined-plan schema.
+
+### Acceptance criteria
+
+- [x] observation derivation module exists.
+- [x] changed-file collection is deterministic Git evidence.
+- [x] changed files are repository-relative.
+- [x] clean workspace produces no changed files.
+- [x] modified/untracked/deleted files are detected.
+- [x] rename behavior is deterministic and characterized.
+- [x] changed-file collection does not mutate cwd.
+- [x] `finalOutcome` comes from valid terminal refined-plan evidence.
+- [x] telemetry final status is not used as benchmark outcome.
+- [x] valid `blocked` state derives `blocked` despite graph status `failed`.
+- [x] invalid/inconsistent terminal states fail derivation.
+- [x] missing refined plan fails derivation.
+- [x] `validationPassed` comes from Step 6 evidence.
+- [x] validation commands are not rerun.
+- [x] `humanInterventionRequired` is explicit runner evidence.
+- [x] `blocked` does not imply human intervention.
+- [x] no acceptance evaluation occurs.
+- [x] no provider/Harness execution occurs in focused tests.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Steps 1-6 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-benchmark-changed-files && \
+npm run test:h0-003-benchmark-observation && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-run-benchmark && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): derive run observation"
+```
+
+### Exit condition
+
+Step 7 is accepted when all four existing `BenchmarkRunObservation` fields can
+be derived from deterministic, source-backed evidence without changing H0-002
+acceptance semantics.
+
+**Expected next step:**
+
+```text
+H0-003 Step 8 — Complete Benchmark Runner Composition
+```
+
+## H0-003 Step 7 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented deterministic evidence boundaries:
+
+```text
+isolated Git workspace
+  ↓
+collectBenchmarkChangedFiles(...)
+  ↓
+repository-relative filesChanged[]
+
+HarnessRunResult.state
+  +
+BenchmarkValidationResult
+  +
+explicit intervention evidence
+  ↓
+deriveBenchmarkRunObservation(...)
+  ↓
+BenchmarkRunObservation
+```
+
+Changed-file collection uses only Git evidence:
+
+```text
+git diff --name-only --relative HEAD --
+git ls-files --others --exclude-standard
+```
+
+The collector returns a sorted, deduplicated list of repository-relative paths
+and performs no repository mutation.
+
+Rename behavior is characterized by Git's tracked diff semantics:
+
+```text
+staged rename
+  → destination path
+```
+
+Observation derivation enforces terminal-state consistency:
+
+```text
+changes_required
+  → completed
+  → no failureReason
+
+already_satisfied
+  → completed
+  → no failureReason
+
+blocked
+  → failed
+  → failureReason required
+```
+
+Missing or inconsistent refined-plan evidence produces a deterministic
+`BenchmarkObservationDerivationError`.
+
+The derivation explicitly does not infer:
+
+```text
+blocked → human intervention
+telemetry completed/failed → benchmark outcome
+state.filesChanged → benchmark changed files
+```
+
+`validationPassed` is taken directly from accepted Step 6 evidence and
+`humanInterventionRequired` is explicit runner evidence.
+
+No validation command is rerun and no acceptance evaluator is called.
+
+## H0-003 Step 7 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 7 development-environment gate passed after one test-only correction
+that preserved the leading status column returned by `git status --porcelain`
+by replacing a full-string trim with trailing-whitespace trimming.
+
+No production behavior changed after the implementation patch.
+
+Accepted deterministic evidence boundaries:
+
+```text
+isolated Git workspace
+  ↓
+collectBenchmarkChangedFiles(...)
+  ↓
+repository-relative filesChanged[]
+
+HarnessRunResult.state
+  +
+BenchmarkValidationResult
+  +
+explicit runner intervention evidence
+  ↓
+deriveBenchmarkRunObservation(...)
+  ↓
+BenchmarkRunObservation
+```
+
+Verified outcome semantics:
+
+```text
+changes_required
+  → completed
+  → no failureReason
+
+already_satisfied
+  → completed
+  → no failureReason
+
+blocked
+  → failed
+  → failureReason required
+```
+
+Verified evidence semantics:
+
+```text
+filesChanged
+  → Git evidence, not LLM/state claims
+
+validationPassed
+  → Step 6 validation result
+
+humanInterventionRequired
+  → explicit runner evidence
+
+blocked
+  ≠ human intervention
+```
+
+Inconsistent terminal-state combinations fail with
+`BenchmarkObservationDerivationError` rather than being scored.
+
+Changed-file collection is deterministic, repository-relative, non-mutating,
+offline, and independent from process-wide `cwd`.
+
+### Step 8 direction
+
+Proceed to:
+
+```text
+H0-003 Step 8 — Complete Benchmark Runner Composition
+```
+
+Step 8 should compose the already-accepted boundaries:
+
+```text
+BenchmarkTask
+  ↓
+task adapter
+  ↓
+workspace resolver
+  ↓
+runHarness(...)
+  ↓
+validation executor
+  ↓
+changed-file collector
+  ↓
+observation derivation
+  ↓
+evaluateBenchmarkAcceptance(...)
+  ↓
+runner result
+  ↓
+cleanup in finally
+```
+
+Step 8 must preserve existing H0-002 acceptance semantics and keep comparison
+reporting outside the runner.
+
+The first implementation should use injected dependencies in deterministic tests
+so the full lifecycle can be proven without provider cost before any B01-B05
+end-to-end benchmark execution.
+
+Step 8 should compose:
+
+```text
+task adapter
+workspace resolution
+runHarness
+validation
+changed-file collection
+observation derivation
+existing acceptance evaluator
+cleanup
+```
+
+into one benchmark-run result while preserving the already-accepted ownership
+boundaries.
 
 # Release Procedure — v0.1.0-alpha.7
 
