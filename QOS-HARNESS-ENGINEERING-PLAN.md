@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 2 accepted
+**Task status:** ✅ H0-003 Step 3 accepted
 
 ---
 
@@ -6425,6 +6425,429 @@ follow only after that contract is accepted.
 
 **Expected next step:** define the benchmark workspace resolver contract and its
 isolation semantics before implementing Git worktrees.
+
+## H0-003 Step 3 — Benchmark Workspace Resolver Contract
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Define the stable contract and lifecycle semantics for resolving a benchmark
+repository identity into one isolated `ResolvedWorkspace` before introducing
+real Git/worktree mutation.
+
+This step is contract-first.
+
+It must establish what later Git infrastructure is required to guarantee, but
+must not yet create or remove worktrees.
+
+### Problem
+
+H0-002 benchmark tasks use machine-independent identity:
+
+```text
+repository.id
+repository.revision
+```
+
+while `runHarness(...)` requires:
+
+```text
+ResolvedWorkspace.repositoryPath
+```
+
+H0-003 therefore needs one infrastructure boundary that can translate:
+
+```text
+repository identity
+    ↓
+isolated local execution workspace
+```
+
+without leaking local paths back into task identity.
+
+### Architectural direction
+
+Preferred contract shape:
+
+```ts
+type BenchmarkWorkspaceRequest = Readonly<{
+  repository: BenchmarkRepositoryRef;
+}>;
+
+type ResolvedBenchmarkWorkspace = Readonly<{
+  workspace: ResolvedWorkspace;
+  cleanup(): Promise<void>;
+}>;
+```
+
+The exact exported names may be refined by implementation evidence, but the
+following semantics are requirements:
+
+```text
+input
+  → machine-independent repository id + revision
+
+output
+  → concrete isolated repositoryPath
+
+lifecycle
+  → explicit cleanup ownership
+```
+
+### Resolver responsibility
+
+The future resolver will own:
+
+```text
+repository.id lookup
+revision verification
+isolated checkout/worktree creation
+workspace path allocation
+baseline immutability
+cleanup
+```
+
+It must not own:
+
+```text
+BenchmarkTask → NormalizedHarnessTask adaptation
+runHarness(...)
+validation commands
+benchmark acceptance
+provider/model selection
+telemetry schema
+```
+
+### Isolation invariants
+
+A resolved benchmark workspace must eventually prove:
+
+1. **Fresh isolation**
+   - each benchmark run receives a dedicated execution directory;
+   - stale mutations from a previous benchmark cannot enter a new run.
+
+2. **Requested revision**
+   - execution starts at the exact requested benchmark revision;
+   - revision mismatch must fail deterministically before Harness execution.
+
+3. **Baseline immutability**
+   - mutations made by the Harness cannot modify the source/baseline checkout
+     used to create benchmark runs.
+
+4. **Explicit lifecycle**
+   - cleanup is owned by the resolved workspace/resolver boundary;
+   - caller can clean the workspace even if Harness execution or validation
+     fails.
+
+5. **No identity leakage**
+   - local workspace paths never become `BenchmarkRepositoryRef.id`;
+   - local workspace paths never become `NormalizedHarnessTask.repository.id`.
+
+6. **No hidden global process mutation**
+   - workspace resolution must not require changing process-wide `cwd`;
+   - `runHarness(...)` receives the resolved path explicitly.
+
+### Repository lookup boundary
+
+Step 3 does not decide yet whether repository IDs are resolved through:
+
+```text
+configured local repository catalog
+fixture repository registry
+Git URL mapping
+future pluggable repository source
+```
+
+That is an infrastructure concern.
+
+The contract should therefore separate:
+
+```text
+repository identity
+```
+
+from:
+
+```text
+how repository identity is located
+```
+
+Do not put Git URLs or absolute paths into `BenchmarkTask` merely to make the
+resolver easier to implement.
+
+### Cleanup semantics
+
+The future orchestration must be able to use:
+
+```ts
+const resolved = await resolver.resolve(...);
+
+try {
+  await runHarness(...);
+  // validation / observation
+} finally {
+  await resolved.cleanup();
+}
+```
+
+Cleanup must therefore be:
+
+```text
+explicit
+awaitable
+idempotent if practical
+safe after partial failures
+```
+
+Whether cleanup idempotency is mandatory or best-effort should be decided from
+the first deterministic implementation test.
+
+### Step 3 production rule
+
+Step 3 may add only:
+
+```text
+workspace resolver contract/types
+deterministic contract test
+PLAN metadata
+package test script
+```
+
+No real Git command is allowed.
+
+Preferred files:
+
+```text
+src/benchmarks/workspace.ts
+src/test-h0-003-workspace-contract.ts
+```
+
+`src/benchmarks/workspace.ts` should contain interfaces/types only in this step.
+
+### Deterministic test requirements
+
+The Step 3 test must prove:
+
+```text
+resolver consumes BenchmarkRepositoryRef
+resolver returns explicit ResolvedWorkspace
+resolved path is runtime-only
+cleanup is explicit and awaitable
+a fake resolver can satisfy the contract without Git
+benchmark task adapter remains independent from workspace resolution
+runHarness remains independent from repository lookup
+no concrete Git command/process implementation exists in the contract module
+```
+
+No filesystem mutation, temp directory, Git command, provider call, or Harness
+execution is required.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/workspace.ts
+src/test-h0-003-workspace-contract.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/task-adapter.ts
+src/intake/*
+src/app/run-harness.ts
+src/telemetry/*
+src/graph/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- call `git`;
+- use `git worktree`;
+- clone repositories;
+- allocate temp directories;
+- delete directories;
+- execute Harness runs;
+- execute benchmark validations;
+- calculate diffs;
+- derive benchmark observations;
+- evaluate acceptance;
+- add repository URLs to benchmark tasks;
+- add machine-local paths to normalized task identity;
+- add a repository database/registry implementation.
+
+### Acceptance criteria
+
+- [x] workspace resolver contract module exists.
+- [x] resolver input is based on `BenchmarkRepositoryRef`.
+- [x] resolver output carries `ResolvedWorkspace`.
+- [x] cleanup ownership is explicit.
+- [x] cleanup is asynchronous/awaitable.
+- [x] a deterministic fake resolver satisfies the contract.
+- [x] repository path remains outside benchmark identity.
+- [x] repository path remains outside normalized task identity.
+- [x] benchmark task adapter does not resolve workspaces.
+- [x] `runHarness(...)` does not resolve repository IDs.
+- [x] contract module imports no concrete Git/process/filesystem implementation.
+- [x] no Git mutation occurs.
+- [x] no filesystem mutation occurs.
+- [x] no provider/Harness run occurs.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Steps 1-2 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): define workspace resolver contract"
+```
+
+### Exit condition
+
+Step 3 is accepted when the isolation/lifecycle boundary is explicit and can be
+satisfied by a deterministic fake without depending on Git.
+
+Only then may Step 4 introduce real isolated workspace infrastructure.
+
+## H0-003 Step 3 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented contract:
+
+```text
+BenchmarkWorkspaceRequest
+  → repository: BenchmarkRepositoryRef
+
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+ResolvedBenchmarkWorkspace
+  → workspace: ResolvedWorkspace
+  → cleanup(): Promise<void>
+```
+
+The contract deliberately contains no concrete Git, process, filesystem, temp
+directory, repository-catalog, or clone/worktree implementation.
+
+The deterministic test uses a fake resolver and proves:
+
+```text
+repository identity is input
+repositoryPath is output-only runtime data
+cleanup is explicit and awaitable
+task adapter remains workspace-independent
+runHarness remains lookup-independent
+benchmark and normalized task identities contain no repositoryPath
+contract module contains no concrete Git/filesystem/process behavior
+```
+
+Real workspace mutation remains deferred to Step 4.
+
+## H0-003 Step 3 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 3 development-environment gate passed with the workspace resolver
+contract and deterministic fake implementation.
+
+Accepted boundary:
+
+```text
+BenchmarkWorkspaceRequest
+  → repository: BenchmarkRepositoryRef
+
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+ResolvedBenchmarkWorkspace
+  → workspace: ResolvedWorkspace
+  → cleanup(): Promise<void>
+```
+
+Verified invariants:
+
+```text
+repository identity
+  ≠ runtime workspace path
+
+BenchmarkTask
+  ≠ workspace resolution
+
+NormalizedHarnessTask
+  ≠ workspace resolution
+
+runHarness(...)
+  ≠ repository lookup
+
+workspace contract
+  ≠ concrete Git/filesystem/process implementation
+```
+
+The contract now makes cleanup ownership explicit and awaitable while preserving
+the separation between machine-independent benchmark identity and concrete local
+execution location.
+
+### Step 4 direction
+
+Proceed to:
+
+```text
+H0-003 Step 4 — Git Worktree Workspace Resolver
+```
+
+Step 4 must implement the accepted contract using deterministic local Git
+fixtures.
+
+Required evidence before full runner orchestration:
+
+```text
+exact requested revision
+fresh isolated workspace per resolution
+baseline checkout remains unchanged after workspace mutation
+cleanup removes the isolated worktree
+cleanup behavior is safe after partial failure
+no process-wide cwd mutation
+```
+
+Step 4 must still avoid provider calls, benchmark validation execution, and
+benchmark acceptance evaluation.
+
+**Expected next step:**
+
+```text
+H0-003 Step 4 — Git Worktree Workspace Resolver
+```
+
+Step 4 must implement the accepted contract with deterministic local Git
+fixtures before any full benchmark orchestration is introduced.
 
 # Release Procedure — v0.1.0-alpha.7
 
