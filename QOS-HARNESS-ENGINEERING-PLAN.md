@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 7 accepted
+**Task status:** ✅ H0-003 complete
 
 ---
 
@@ -9027,6 +9027,662 @@ cleanup
 
 into one benchmark-run result while preserving the already-accepted ownership
 boundaries.
+
+## H0-003 Step 8 — Complete Benchmark Runner Composition
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Compose the already-accepted H0-003 boundaries into one complete deterministic
+benchmark runner lifecycle:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+executeBenchmarkValidation(...)
+  ↓
+collectBenchmarkChangedFiles(...)
+  ↓
+deriveBenchmarkRunObservation(...)
+  ↓
+evaluateBenchmarkAcceptance(...)
+  ↓
+BenchmarkRunnerResult
+  ↓
+cleanup in finally
+```
+
+Step 8 is the final H0-003 composition slice.
+
+It must preserve every ownership boundary established in Steps 1-7 and must not
+change H0-002 acceptance semantics.
+
+### Architectural rule
+
+The runner owns sequencing only.
+
+It must not duplicate or reimplement:
+
+```text
+task normalization
+workspace isolation
+Harness execution
+validation command policy
+Git changed-file detection
+observation semantics
+acceptance semantics
+```
+
+Those concerns already have accepted boundaries.
+
+### Preferred production API
+
+Create or evolve:
+
+```text
+src/benchmarks/run-benchmark.ts
+```
+
+toward a complete runner result.
+
+Preferred conceptual shape:
+
+```ts
+type BenchmarkRunnerResult = Readonly<{
+  harness: HarnessRunResult;
+  validation: BenchmarkValidationResult;
+  observation: BenchmarkRunObservation;
+  acceptance: BenchmarkAcceptanceResult;
+}>;
+
+type RunBenchmarkDependencies = Readonly<{
+  workspaceResolver: BenchmarkWorkspaceResolver;
+  runHarness?: BenchmarkHarnessExecutor;
+  executeValidation?: typeof executeBenchmarkValidation;
+  collectChangedFiles?: typeof collectBenchmarkChangedFiles;
+  evaluateAcceptance?: typeof evaluateBenchmarkAcceptance;
+}>;
+```
+
+Exact names may be refined by implementation evidence.
+
+### Required sequence
+
+The runner must execute in this exact order:
+
+```text
+1. adapt BenchmarkTask → NormalizedHarnessTask
+2. resolve BenchmarkRepositoryRef → isolated workspace
+3. run Harness in resolved workspace
+4. execute benchmark validation commands in the same workspace
+5. collect deterministic changed-file evidence before cleanup
+6. derive BenchmarkRunObservation
+7. evaluate existing H0-002 acceptance
+8. return complete runner result
+9. cleanup workspace in finally
+```
+
+### Cleanup rule
+
+Workspace cleanup must remain guaranteed with `try/finally`.
+
+Cleanup must happen after:
+
+```text
+successful runner completion
+Harness failure
+validation infrastructure failure
+changed-files infrastructure failure
+observation derivation failure
+acceptance evaluation failure
+```
+
+A normal benchmark validation failure:
+
+```text
+exitCode != 0
+```
+
+is not an infrastructure exception and therefore should still produce:
+
+```text
+validation.passed = false
+observation.validationPassed = false
+acceptance result
+```
+
+before cleanup.
+
+### Failure semantics
+
+#### Workspace resolution failure
+
+```text
+no Harness call
+no validation
+no changed-file collection
+no observation
+no acceptance
+resolution error propagates
+```
+
+#### Harness failure
+
+```text
+cleanup executes
+downstream validation/observation/acceptance do not execute
+original Harness error propagates
+```
+
+This step does not reinterpret Harness infrastructure failure as benchmark
+`blocked`.
+
+#### Validation infrastructure failure
+
+```text
+cleanup executes
+changed-file collection does not execute
+observation/acceptance do not execute
+original infrastructure error propagates
+```
+
+#### Validation command failure
+
+```text
+validation result is returned as evidence
+changed-file collection still executes
+observation derives validationPassed = false
+acceptance evaluator decides benchmark failure
+runner returns acceptance evidence
+```
+
+#### Changed-file collection failure
+
+```text
+cleanup executes
+observation/acceptance do not execute
+original collector error propagates
+```
+
+#### Observation derivation failure
+
+```text
+cleanup executes
+acceptance does not execute
+derivation error propagates
+```
+
+#### Cleanup failure
+
+Preserve Step 5 semantics:
+
+```text
+cleanup failure after otherwise successful runner
+  → cleanup failure propagates
+
+primary runner failure + cleanup failure
+  → primary runner failure is preserved
+```
+
+Do not add generic aggregate-error infrastructure in this step.
+
+### Human intervention baseline
+
+The current automated H0-003 runner has no manual intervention mechanism.
+
+Therefore Step 8 must pass explicit deterministic runner evidence:
+
+```text
+humanInterventionRequired = false
+```
+
+into observation derivation.
+
+Do not infer it from:
+
+```text
+blocked
+failureReason
+status
+validation failure
+```
+
+A future interactive runner may replace this with a real intervention signal.
+
+### Acceptance boundary
+
+Step 8 must call the existing:
+
+```text
+evaluateBenchmarkAcceptance(...)
+```
+
+without changing:
+
+```text
+BenchmarkRunObservation
+BenchmarkAcceptanceResult
+failure codes
+expected outcome semantics
+B01-B05 definitions
+```
+
+The runner should pass:
+
+```text
+benchmark
+observation
+```
+
+exactly as required by the current H0-002 acceptance function.
+
+### Deterministic dependency injection
+
+The focused Step 8 test must avoid provider cost.
+
+Use injected fakes for:
+
+```text
+workspace resolver
+runHarness
+validation executor
+changed-file collector
+```
+
+The real acceptance evaluator and observation derivation may be used directly
+because they are deterministic and already accepted.
+
+If helpful, acceptance evaluation may also remain injectable for sequencing
+tests, but the final deterministic test must prove compatibility with the real
+H0-002 evaluator.
+
+### Required deterministic tests
+
+Create or evolve:
+
+```text
+src/test-h0-003-run-benchmark.ts
+```
+
+or add:
+
+```text
+src/test-h0-003-complete-benchmark-runner.ts
+```
+
+Prefer a new focused test if changing the existing Step 5 test would obscure
+the earlier lifecycle guarantees.
+
+The Step 8 test must prove:
+
+```text
+exact lifecycle ordering
+same resolved workspace is used for Harness, validation, and changed-file collection
+validation receives benchmark.validationCommands unchanged
+changed files are collected before cleanup
+observation uses final Harness state + validation + changed files
+humanInterventionRequired baseline is false
+real acceptance evaluator accepts a matching synthetic case
+real acceptance evaluator rejects a mismatched synthetic case
+validation failure is evidence, not runner infrastructure failure
+cleanup runs after full success
+cleanup runs after each infrastructure failure boundary
+acceptance runs only after observation is derived
+no graph/provider internals are imported directly
+no benchmark definitions are mutated
+```
+
+### Result contract
+
+The final H0-003 runner result must preserve evidence needed by H0-004.
+
+At minimum it should expose:
+
+```text
+HarnessRunResult
+BenchmarkValidationResult
+BenchmarkRunObservation
+BenchmarkAcceptanceResult
+```
+
+Do not discard telemetry contained in `HarnessRunResult`.
+
+H0-004 comparison reporting will consume this evidence later.
+
+### Files
+
+Expected modify:
+
+```text
+src/benchmarks/run-benchmark.ts
+src/test-h0-003-run-benchmark.ts
+```
+
+or create a separate focused test:
+
+```text
+src/test-h0-003-complete-benchmark-runner.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/acceptance.ts
+src/benchmarks/task-adapter.ts
+src/benchmarks/workspace.ts
+src/benchmarks/git-worktree-workspace.ts
+src/benchmarks/validation.ts
+src/benchmarks/changed-files.ts
+src/benchmarks/observation.ts
+src/intake/*
+src/app/run-harness.ts
+src/state.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+```
+
+unless deterministic composition exposes a concrete pre-existing contract
+defect.
+
+### Non-goals
+
+Do not yet:
+
+- execute B01-B05 against real providers;
+- add benchmark-suite iteration;
+- add concurrency;
+- add comparison reporting;
+- calculate SFCR aggregates across runs;
+- change telemetry schema;
+- change benchmark definitions;
+- change provider/model routing;
+- add job queues;
+- add UI;
+- add remote repository cloning;
+- add retry policy around benchmark infrastructure.
+
+### Acceptance criteria
+
+- [x] complete benchmark runner result exists.
+- [x] runner composes all accepted Steps 2-7 boundaries.
+- [x] lifecycle order is deterministic.
+- [x] same isolated workspace is used by Harness, validation, and changed-file collection.
+- [x] validation commands come from the selected BenchmarkTask unchanged.
+- [x] validation command failure remains evidence, not infrastructure exception.
+- [x] changed files are collected before cleanup.
+- [x] observation is derived exactly once.
+- [x] `humanInterventionRequired` baseline is explicit false.
+- [x] existing H0-002 acceptance evaluator is called.
+- [x] acceptance semantics are unchanged.
+- [x] matching synthetic observation is accepted.
+- [x] mismatched synthetic observation is rejected with existing failure codes.
+- [x] complete runner result preserves Harness/validation/observation/acceptance evidence.
+- [x] cleanup runs after successful complete execution.
+- [x] cleanup runs after Harness failure.
+- [x] cleanup runs after validation infrastructure failure.
+- [x] cleanup runs after changed-file collection failure.
+- [x] cleanup runs after observation derivation failure.
+- [x] primary failure is preserved if cleanup also fails.
+- [x] no direct graph/provider import exists.
+- [x] no benchmark definition is mutated.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Steps 1-7 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-complete-benchmark-runner && \
+npm run test:h0-003-benchmark-changed-files && \
+npm run test:h0-003-benchmark-observation && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-run-benchmark && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): compose complete runner"
+```
+
+### Exit condition
+
+H0-003 is functionally complete when one `BenchmarkTask` can move through:
+
+```text
+task adaptation
+workspace isolation
+Harness execution
+validation
+changed-file evidence
+observation derivation
+acceptance evaluation
+cleanup
+```
+
+and return a complete deterministic result without violating any accepted
+boundary.
+
+After Step 8, do not immediately begin H1.
+
+The next milestone is:
+
+```text
+H0-004 — Comparison Report
+```
+
+## H0-003 Step 8 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented a separate complete composition boundary:
+
+```text
+src/benchmarks/complete-runner.ts
+```
+
+The earlier Step 5 `runBenchmark(...)` lifecycle remains unchanged so its
+focused orchestration contract and regression test remain intact.
+
+Complete runner sequence:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+executeBenchmarkValidation(...)
+  ↓
+collectBenchmarkChangedFiles(...)
+  ↓
+deriveBenchmarkRunObservation(...)
+  ↓
+evaluateBenchmarkAcceptance(...)
+  ↓
+CompleteBenchmarkRunnerResult
+  ↓
+cleanup in finally
+```
+
+The complete result preserves:
+
+```text
+HarnessRunResult
+BenchmarkValidationResult
+BenchmarkRunObservation
+BenchmarkAcceptanceResult
+```
+
+The automated H0-003 baseline supplies:
+
+```text
+humanInterventionRequired = false
+```
+
+explicitly rather than inferring intervention from `blocked`, status, or
+failureReason.
+
+Failure policy remains boundary-specific:
+
+```text
+workspace resolution failure
+  → no execution lifecycle
+
+Harness / validation infrastructure / changed-files / observation / acceptance
+failure
+  → cleanup
+  → primary error propagates
+
+validation command non-zero exit
+  → normal validation evidence
+  → observation
+  → existing acceptance evaluator
+
+cleanup failure after success
+  → cleanup error propagates
+
+primary runner failure + cleanup failure
+  → primary runner error preserved
+```
+
+Focused tests use injected dependencies and the real H0-002 observation and
+acceptance semantics without provider cost.
+
+No benchmark definitions, acceptance semantics, graph/provider behavior, or
+telemetry contracts are changed.
+
+## H0-003 Final Validation Record
+
+**Status:** ✅ Milestone accepted
+
+The complete Step 8 development-environment gate passed.
+
+H0-003 now has a complete deterministic benchmark runner composition:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+executeBenchmarkValidation(...)
+  ↓
+collectBenchmarkChangedFiles(...)
+  ↓
+deriveBenchmarkRunObservation(...)
+  ↓
+evaluateBenchmarkAcceptance(...)
+  ↓
+CompleteBenchmarkRunnerResult
+  ↓
+cleanup in finally
+```
+
+Accepted runner evidence:
+
+```text
+HarnessRunResult
+BenchmarkValidationResult
+BenchmarkRunObservation
+BenchmarkAcceptanceResult
+```
+
+Accepted behavioral guarantees across H0-003:
+
+```text
+machine-independent task identity
+isolated exact-revision Git worktrees
+baseline immutability
+explicit cleanup ownership
+benchmark-neutral Harness application boundary
+ordered validation execution
+captured validation evidence
+Git-derived changed-file evidence
+source-backed finalOutcome derivation
+blocked does not imply human intervention
+existing H0-002 acceptance semantics preserved
+primary failures preserved across cleanup
+no direct graph/provider ownership in benchmark runner
+```
+
+### H0-003 milestone conclusion
+
+H0-003 is functionally complete.
+
+The runner can now execute one benchmark task through all required deterministic
+boundaries and return evidence suitable for comparison.
+
+No B01-B05 provider-backed comparison is claimed yet.
+
+### Next milestone
+
+Proceed to:
+
+```text
+H0-004 — Comparison Report
+```
+
+H0-004 must use the fixed benchmark suite to measure the Harness rather than
+continue adding architecture.
+
+The comparison milestone should produce evidence around:
+
+```text
+SFCR / accepted completion
+outcome correctness
+validation success
+human intervention
+latency
+LLM calls / usage / cost where available
+files changed
+failure reasons
+task-by-task evidence
+```
+
+H0-004 is the GO / PIVOT / STOP checkpoint.
+
+Do not automatically start H1 Repository Intelligence or H2 Context Engine
+until the comparison evidence is reviewed.
+
+H0-004 should execute and compare the fixed benchmark suite and produce the
+evidence required for the GO / PIVOT / STOP checkpoint before repository
+intelligence or Context Engine work begins.
 
 # Release Procedure — v0.1.0-alpha.7
 

@@ -56,7 +56,8 @@
     "test:h0-003-run-benchmark": "tsx src/test-h0-003-run-benchmark.ts",
     "test:h0-003-benchmark-validation": "tsx src/test-h0-003-benchmark-validation.ts",
     "test:h0-003-benchmark-changed-files": "tsx src/test-h0-003-benchmark-changed-files.ts",
-    "test:h0-003-benchmark-observation": "tsx src/test-h0-003-benchmark-observation.ts"
+    "test:h0-003-benchmark-observation": "tsx src/test-h0-003-benchmark-observation.ts",
+    "test:h0-003-complete-benchmark-runner": "tsx src/test-h0-003-complete-benchmark-runner.ts"
   },
   "keywords": [],
   "author": "",
