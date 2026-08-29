@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 complete
+**Task status:** ✅ H0-004 Step 1 accepted
 
 ---
 
@@ -9683,6 +9683,493 @@ until the comparison evidence is reviewed.
 H0-004 should execute and compare the fixed benchmark suite and produce the
 evidence required for the GO / PIVOT / STOP checkpoint before repository
 intelligence or Context Engine work begins.
+
+## H0-004 Step 1 — Comparison Contract & Metrics
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Freeze the comparison contract before executing B01-B05 against the real Harness.
+
+H0-004 is a measurement milestone, not an architecture milestone. The comparison
+layer must consume evidence already produced by H0-003 and H0-001 telemetry and
+summarize it without changing task definitions, acceptance semantics, provider
+behavior, or runner behavior.
+
+### Decision question
+
+```text
+Does the Harness provide enough measurable value to justify continued
+investment beyond H0?
+```
+
+The milestone must support a final:
+
+```text
+GO
+PIVOT
+STOP
+```
+
+decision.
+
+### Unit of comparison
+
+```text
+BenchmarkTask
+  +
+CompleteBenchmarkRunnerResult
+  ↓
+BenchmarkComparisonRecord
+```
+
+The comparison record must preserve task-level evidence rather than only
+aggregate numbers.
+
+### Required per-task evidence
+
+Each record must preserve at least:
+
+```text
+benchmarkId
+difficulty
+expectedOutcome
+observedOutcome
+accepted
+acceptanceFailures[]
+validationPassed
+humanInterventionRequired
+filesChanged[]
+Harness duration / latency
+LLM call count
+token / usage evidence when available
+cost evidence when available
+terminal failureReason when available
+```
+
+### SFCR
+
+Primary metric:
+
+```text
+SFCR = Successful First Completion Rate
+```
+
+For H0-004, successful first completion means:
+
+```text
+benchmark acceptance = accepted
+humanInterventionRequired = false
+no external re-run of the benchmark task
+```
+
+Do not redefine SFCR from only `status = completed`, `validationPassed = true`,
+or outcome equality.
+
+### Outcome correctness
+
+Track independently:
+
+```text
+expectedOutcome === observation.finalOutcome
+```
+
+This remains useful even when acceptance fails because of unexpected changes,
+validation failure, or human intervention.
+
+### Validation success
+
+Track independently:
+
+```text
+observation.validationPassed
+```
+
+### Human intervention
+
+Track:
+
+```text
+observation.humanInterventionRequired
+```
+
+Do not infer intervention from `blocked`.
+
+### Files changed
+
+Preserve the exact Git-derived:
+
+```text
+observation.filesChanged[]
+```
+
+The comparison layer may additionally derive `filesChangedCount`.
+
+### Latency
+
+Use existing H0-001 run telemetry when available.
+
+Do not mix Harness execution duration, workspace setup, validation, and report
+generation into one unlabeled metric.
+
+If telemetry exposes start/end timestamps instead of a direct duration, Step 1
+must characterize the exact derivation before implementation.
+
+### LLM usage
+
+Use provider-neutral H0-001 telemetry.
+
+Track where available:
+
+```text
+LLM call count
+provider/model identifiers
+input token evidence
+output token evidence
+total token evidence
+provider-reported usage
+```
+
+Do not fabricate missing usage. Missing usage is unavailable, not zero.
+
+### Cost
+
+Cost is optional evidence.
+
+If telemetry already contains cost, preserve it. Otherwise:
+
+```text
+cost = unavailable
+```
+
+Do not add provider pricing tables in Step 1.
+
+### Failure evidence
+
+Preserve independently:
+
+```text
+BenchmarkAcceptanceResult.failures[]
+Harness state.failureReason
+```
+
+Do not collapse them into one generic failure string.
+
+### Aggregate metrics enabled by this contract
+
+The future report must be able to compute:
+
+```text
+total tasks
+accepted tasks
+SFCR
+outcome correctness rate
+validation success rate
+human-intervention rate
+mean/median Harness duration
+total LLM calls
+token totals where complete
+task-by-task acceptance failures
+```
+
+With only five fixed tasks, raw task records must remain visible beside
+aggregates.
+
+### Missing-data semantics
+
+Missing evidence must be explicit, preferably `number | null` or an equivalent
+strongly typed representation.
+
+Do not silently coerce:
+
+```text
+unknown token usage → 0
+unknown cost → 0
+missing failure reason → success
+```
+
+### Step 1 source inspection
+
+Before implementation, inspect exact current contracts for:
+
+```text
+CompleteBenchmarkRunnerResult
+BenchmarkAcceptanceResult
+BenchmarkRunObservation
+RunTelemetry
+LLM-call telemetry
+PersistedRunTelemetry
+```
+
+Exact field names and missing-data semantics must come from current source.
+
+### Preferred module
+
+```text
+src/benchmarks/comparison.ts
+```
+
+Preferred conceptual record:
+
+```ts
+type BenchmarkComparisonRecord = Readonly<{
+  benchmarkId: string;
+  difficulty: BenchmarkDifficulty;
+  expectedOutcome: BenchmarkExpectedOutcome;
+  observedOutcome: BenchmarkExpectedOutcome;
+  accepted: boolean;
+  acceptanceFailures: readonly BenchmarkAcceptanceFailure[];
+  validationPassed: boolean;
+  humanInterventionRequired: boolean;
+  filesChanged: readonly string[];
+  harnessDurationSeconds: number | null;
+  llmCallCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  cost: number | null;
+  terminalFailureReason: string | null;
+}>;
+```
+
+Exact names must be source-backed.
+
+### Deterministic test
+
+Preferred:
+
+```text
+src/test-h0-004-comparison-contract.ts
+```
+
+It must prove that one complete runner result maps to one comparison record while
+preserving existing acceptance and observation evidence, and that unavailable
+usage/cost remains explicit.
+
+No provider, graph, runner, Git, validation, or workspace execution is allowed.
+
+### Files
+
+Preferred create:
+
+```text
+src/benchmarks/comparison.ts
+src/test-h0-004-comparison-contract.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not change benchmark definitions, acceptance semantics, complete runner,
+telemetry contracts, providers, graph, or Harness behavior merely to simplify
+reporting.
+
+### Non-goals
+
+Do not yet:
+
+- run B01-B05;
+- add suite iteration;
+- generate Markdown/JSON reports;
+- define GO/PIVOT/STOP thresholds;
+- estimate costs from external pricing;
+- change telemetry;
+- change prompts/models/providers;
+- add retries to improve benchmark scores.
+
+### Acceptance criteria
+
+- [x] comparison record contract exists.
+- [x] benchmark identity/difficulty are preserved.
+- [x] expected and observed outcomes are preserved.
+- [x] acceptance result is preserved, not recomputed.
+- [x] validation evidence is preserved.
+- [x] human-intervention evidence is preserved.
+- [x] exact filesChanged list is preserved.
+- [x] Harness duration source is characterized.
+- [x] LLM call-count source is characterized.
+- [x] token usage missing-data semantics are explicit.
+- [x] cost missing-data semantics are explicit.
+- [x] terminal Harness failureReason is preserved independently.
+- [x] no provider/runner execution occurs.
+- [x] no benchmark semantics change.
+- [x] no new runtime dependency is added.
+- [x] H0-003 full gate remains green.
+- [x] H0-002/H0-001 regressions remain green.
+
+### Commit
+
+```bash
+git commit -m "feat(benchmark): define comparison metrics"
+```
+
+### Exit condition
+
+Step 1 is accepted when one `CompleteBenchmarkRunnerResult` can be transformed
+into one comparison-ready record with explicit missing-data semantics and
+without re-running or re-scoring the benchmark.
+
+## H0-004 Step 1 Source Evidence Record
+
+Current contracts establish these exact comparison sources:
+
+```text
+Harness duration
+  ← HarnessRunResult.telemetry.durationMs
+
+LLM call count
+  ← HarnessRunResult.telemetry.llmCalls.length
+
+LLM model identity
+  ← RunTelemetry.llmCalls[].model
+
+LLM role
+  ← RunTelemetry.llmCalls[].role
+
+prompt tokens
+completion tokens
+total tokens
+  ← optional per-call H0-001 telemetry fields
+
+provider identity
+  → not currently present in LlmCallTelemetry
+
+cost
+  → not currently present in H0-001 telemetry
+
+terminal failure reason
+  ← HarnessRunResult.state.failureReason
+```
+
+Token aggregation semantics are source-safe:
+
+```text
+zero LLM calls
+  → known total = 0
+
+one or more calls and every call reports a token field
+  → sum the field
+
+one or more calls and any call omits a token field
+  → aggregate = null
+```
+
+Cost remains:
+
+```text
+null
+```
+
+because current telemetry has no cost evidence.
+
+The comparison record preserves full per-call `LlmCallTelemetry[]` so model,
+role, elapsed time, and any available usage remain available to later H0-004
+reporting without expanding telemetry contracts.
+
+## H0-004 Step 1 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented:
+
+```text
+BenchmarkTask
+  +
+CompleteBenchmarkRunnerResult
+  ↓
+createBenchmarkComparisonRecord(...)
+  ↓
+BenchmarkComparisonRecord
+```
+
+The record preserves existing acceptance and observation evidence rather than
+recomputing benchmark correctness.
+
+It also derives only source-backed summaries:
+
+```text
+filesChangedCount
+harnessDurationMs
+llmCallCount
+complete token aggregates when available
+```
+
+No runner, provider, graph, workspace, validation command, or benchmark
+acceptance execution occurs in the focused test.
+
+## H0-004 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The focused comparison-contract gate passed.
+
+Accepted comparison sources:
+
+```text
+Harness duration
+  ← RunTelemetry.durationMs
+
+LLM call count
+  ← RunTelemetry.llmCalls.length
+
+LLM model / role / elapsed
+  ← RunTelemetry.llmCalls[]
+
+promptTokens / completionTokens / totalTokens
+  ← optional per-call telemetry fields
+
+cost
+  → unavailable in current telemetry
+  → represented as null
+
+terminal failure reason
+  ← HarnessRunResult.state.failureReason
+```
+
+Accepted missing-data semantics:
+
+```text
+zero LLM calls
+  → known token total = 0
+
+one or more calls with complete usage
+  → summed token totals
+
+one or more calls with incomplete usage
+  → token aggregate = null
+
+missing cost evidence
+  → cost = null
+```
+
+The comparison layer preserves H0-003 observation/acceptance evidence and does
+not recompute benchmark correctness.
+
+### Step 2 direction
+
+Proceed to:
+
+```text
+H0-004 Step 2 — Benchmark Suite Runner
+```
+
+Step 2 should execute the fixed B01-B05 suite through the accepted complete
+runner and persist one comparison record per benchmark execution.
+
+Before real provider-backed execution, Step 2 must first prove suite iteration,
+result persistence, failure isolation, and no hidden retry/re-run behavior with
+deterministic injected runners.
+
+**Expected next step:**
+
+```text
+H0-004 Step 2 — Benchmark Suite Runner
+```
 
 # Release Procedure — v0.1.0-alpha.7
 
