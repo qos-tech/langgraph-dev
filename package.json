@@ -53,7 +53,8 @@
     "test:h0-003-benchmark-task-adapter": "tsx src/test-h0-003-benchmark-task-adapter.ts",
     "test:h0-003-workspace-contract": "tsx src/test-h0-003-workspace-contract.ts",
     "test:h0-003-git-worktree-workspace": "tsx src/test-h0-003-git-worktree-workspace.ts",
-    "test:h0-003-run-benchmark": "tsx src/test-h0-003-run-benchmark.ts"
+    "test:h0-003-run-benchmark": "tsx src/test-h0-003-run-benchmark.ts",
+    "test:h0-003-benchmark-validation": "tsx src/test-h0-003-benchmark-validation.ts"
   },
   "keywords": [],
   "author": "",

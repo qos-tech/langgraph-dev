@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 5 accepted
+**Task status:** ✅ H0-003 Step 6 accepted
 
 ---
 
@@ -7846,6 +7846,518 @@ no provider/model concerns
 
 Only after validation execution is accepted should H0-003 derive the remaining
 `BenchmarkRunObservation` fields and call the existing acceptance evaluator.
+
+## H0-003 Step 6 — Benchmark Validation Command Execution
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Add deterministic execution of benchmark `validationCommands` inside the
+already-resolved benchmark workspace.
+
+This step owns validation execution only.
+
+It must not yet derive the complete `BenchmarkRunObservation`, evaluate
+benchmark acceptance, calculate comparison reports, or change Harness/provider
+behavior.
+
+### Input boundary
+
+Validation execution consumes:
+
+```text
+workspace.repositoryPath
+benchmark.validationCommands[]
+```
+
+The commands remain benchmark-owned data.
+
+They must not be copied into:
+
+```text
+NormalizedHarnessTask
+Harness state
+telemetry schema
+provider prompts
+```
+
+### Output boundary
+
+Introduce a narrow validation result contract.
+
+Preferred shape:
+
+```ts
+type BenchmarkValidationCommandResult = Readonly<{
+  command: string;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}>;
+
+type BenchmarkValidationResult = Readonly<{
+  passed: boolean;
+  commands: readonly BenchmarkValidationCommandResult[];
+}>;
+```
+
+Exact names may be refined by implementation evidence, but Step 6 must expose
+enough deterministic evidence for the later observation layer to derive:
+
+```text
+validationPassed
+```
+
+without re-running commands.
+
+### Execution policy
+
+Validation commands execute:
+
+```text
+after runHarness(...)
+before workspace cleanup
+inside the resolved workspace
+in benchmark-defined order
+```
+
+The orchestration sequence will eventually become:
+
+```text
+BenchmarkTask
+  ↓
+task adapter
+  ↓
+workspace resolver
+  ↓
+runHarness(...)
+  ↓
+validation executor
+  ↓
+validation result
+  ↓
+cleanup
+```
+
+Step 6 should not yet collapse this full sequence into acceptance evaluation.
+
+### Command format
+
+Current H0-002 benchmark tasks define validation commands as strings.
+
+Step 6 must characterize how those strings are executed safely.
+
+Preferred policy:
+
+```text
+spawn through an explicit shell only because the existing benchmark contract
+stores commands as shell strings
+```
+
+If a shell is used:
+
+```text
+cwd must be the resolved workspace
+stdio must be captured
+environment inheritance must remain explicit/default Node behavior
+the command string must come only from trusted benchmark definitions
+```
+
+Do not pretend string commands can be passed to `execFile` as safe argv without
+parsing semantics.
+
+Step 6 should keep the command runner narrow and benchmark-specific.
+
+### Short-circuit policy
+
+Preferred initial policy:
+
+```text
+execute in order
+stop on first non-zero exit
+passed = false
+return evidence collected so far
+```
+
+Rationale:
+
+```text
+later commands often depend on earlier build/typecheck success
+avoids unnecessary cost
+matches gate-style benchmark semantics
+```
+
+The deterministic test must lock this behavior before acceptance.
+
+### Failure semantics
+
+A validation command exiting non-zero is expected benchmark evidence, not an
+infrastructure exception.
+
+Therefore:
+
+```text
+command exit non-zero
+  → BenchmarkValidationResult.passed = false
+  → command result captures exitCode/stdout/stderr
+  → remaining commands are not executed
+```
+
+Infrastructure failure to launch the shell/process is different:
+
+```text
+spawn/exec infrastructure failure
+  → propagate error
+```
+
+The exact Node API may return non-zero exits as rejected promises; Step 6 must
+normalize that into validation evidence while still distinguishing launch-level
+failures.
+
+### stdout / stderr
+
+Capture text output for every executed command.
+
+Do not print command output directly from production infrastructure.
+
+The caller/reporting layer may decide later what to display.
+
+### Working directory
+
+Every command must execute with:
+
+```text
+cwd = resolved workspace.repositoryPath
+```
+
+The validation layer must never change process-wide `cwd`.
+
+### Dependency injection
+
+Provide a narrow injection seam for deterministic tests.
+
+Preferred concept:
+
+```text
+BenchmarkValidationCommandRunner
+```
+
+The focused unit test should prove ordering and failure policy without launching
+real commands.
+
+A second deterministic integration test may execute harmless local commands if
+needed to prove cwd/stdout/stderr behavior.
+
+Avoid a generic process execution framework.
+
+### Production files
+
+Preferred new file:
+
+```text
+src/benchmarks/validation.ts
+```
+
+Step 6 may modify:
+
+```text
+src/benchmarks/run-benchmark.ts
+```
+
+only if required to insert validation into the existing lifecycle while keeping
+the return contract coherent.
+
+However, prefer first establishing the validation executor independently.
+
+If changing `runBenchmark(...)` would force a premature return-contract redesign,
+keep Step 6 standalone and compose it in the next slice.
+
+### Deterministic tests
+
+Preferred test:
+
+```text
+src/test-h0-003-benchmark-validation.ts
+```
+
+The tests must prove:
+
+```text
+commands execute in benchmark-defined order
+cwd is the resolved workspace
+stdout is captured
+stderr is captured
+zero exit marks command success
+all-zero commands produce passed = true
+first non-zero exit produces passed = false
+execution stops after first failure
+non-zero exit is evidence, not thrown infrastructure failure
+launch/infrastructure failure propagates
+process-wide cwd is unchanged
+no provider/graph/Harness call occurs
+no acceptance evaluator is imported/called
+```
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/validation.ts
+src/test-h0-003-benchmark-validation.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify yet:
+
+```text
+src/benchmarks/acceptance.ts
+src/benchmarks/cases.ts
+src/benchmarks/task-adapter.ts
+src/benchmarks/git-worktree-workspace.ts
+src/intake/*
+src/app/run-harness.ts
+src/telemetry/*
+src/graph/*
+src/providers/*
+```
+
+### Non-goals
+
+Do not yet:
+
+- derive `finalOutcome`;
+- derive `filesChanged`;
+- derive `humanInterventionRequired`;
+- construct `BenchmarkRunObservation`;
+- call `evaluateBenchmarkAcceptance(...)`;
+- run B01-B05 end-to-end;
+- build benchmark reports;
+- change benchmark command definitions;
+- add remote execution;
+- add Docker/sandbox execution;
+- add concurrency;
+- change provider/model selection;
+- change telemetry contracts.
+
+### Acceptance criteria
+
+- [x] benchmark validation executor exists.
+- [x] validation consumes workspace path + benchmark command strings.
+- [x] commands execute in declared order.
+- [x] commands execute in the resolved workspace.
+- [x] stdout is captured.
+- [x] stderr is captured.
+- [x] exit code is captured.
+- [x] all-zero exits produce `passed = true`.
+- [x] first non-zero exit produces `passed = false`.
+- [x] execution short-circuits after first failed command.
+- [x] non-zero exit is returned as validation evidence.
+- [x] infrastructure launch failure propagates.
+- [x] process-wide cwd is unchanged.
+- [x] validation output is not written directly by production code.
+- [x] validation commands remain outside normalized task data.
+- [x] no acceptance evaluation occurs.
+- [x] no provider/graph/Harness execution occurs in focused tests.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Steps 1-5 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-run-benchmark && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): execute validation commands"
+```
+
+### Exit condition
+
+Step 6 is accepted when benchmark validation commands can be executed
+deterministically inside the resolved workspace with ordered, captured,
+short-circuiting evidence.
+
+Only after that should H0-003 derive benchmark observation fields and invoke the
+existing acceptance evaluator.
+
+**Expected next step:**
+
+```text
+H0-003 Step 7 — Benchmark Observation Derivation
+```
+
+## H0-003 Step 6 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented validation boundary:
+
+```text
+repositoryPath
+  +
+validationCommands[]
+  ↓
+executeBenchmarkValidation(...)
+  ↓
+BenchmarkValidationResult
+  → passed
+  → ordered command evidence[]
+```
+
+Each command evidence captures:
+
+```text
+command
+exitCode
+stdout
+stderr
+```
+
+The default runner uses Node's shell execution because the existing H0-002
+benchmark contract stores validation commands as trusted shell strings.
+
+Execution policy is now explicit:
+
+```text
+cwd = resolved workspace
+execute in declared order
+capture stdout/stderr
+non-zero exit becomes validation evidence
+stop after first non-zero exit
+all-zero exits → passed = true
+launch/infrastructure failure → propagate
+process cwd remains unchanged
+```
+
+The command runner is injectable for focused deterministic tests.
+
+The integration portion uses only a temporary local directory and harmless
+local shell commands; it requires no network, Harness, graph, provider, Git, or
+acceptance evaluator.
+
+Step 6 remains standalone and does not yet change the `runBenchmark(...)`
+return contract.
+
+Composition with run lifecycle and observation derivation remains deferred.
+
+## H0-003 Step 6 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 6 development-environment gate passed with deterministic focused tests
+and harmless local shell integration coverage.
+
+Accepted validation boundary:
+
+```text
+repositoryPath
+  +
+validationCommands[]
+  ↓
+executeBenchmarkValidation(...)
+  ↓
+BenchmarkValidationResult
+  → passed
+  → commands[]
+      command
+      exitCode
+      stdout
+      stderr
+```
+
+Verified execution semantics:
+
+```text
+commands execute in declared order
+cwd is the resolved workspace
+stdout is captured
+stderr is captured
+exit code is captured
+all-zero exits produce passed = true
+first non-zero exit produces passed = false
+execution stops after first failed command
+non-zero exit is evidence rather than infrastructure exception
+launch/infrastructure failure propagates
+process-wide cwd remains unchanged
+```
+
+The default runner intentionally uses shell execution because the current H0-002
+benchmark contract stores validation commands as trusted shell strings.
+
+Step 6 remains independent from:
+
+```text
+BenchmarkRunObservation
+evaluateBenchmarkAcceptance(...)
+Git diff/filesChanged derivation
+finalOutcome derivation
+humanInterventionRequired derivation
+Harness/provider/model behavior
+```
+
+### Step 7 direction
+
+Proceed to:
+
+```text
+H0-003 Step 7 — Benchmark Observation Derivation
+```
+
+Step 7 must derive the existing H0-002 acceptance input:
+
+```text
+finalOutcome
+filesChanged
+validationPassed
+humanInterventionRequired
+```
+
+from already-accepted execution evidence.
+
+It must preserve the existing acceptance semantics and must not change the
+B01-B05 expected outcomes merely to make the runner pass.
+
+Before implementing `finalOutcome`, Step 7 should inspect the exact terminal
+Harness state/refined-plan evidence available from `HarnessRunResult.state`
+rather than infer outcome from telemetry `completed | failed`.
+
+`filesChanged` should prefer deterministic repository/workspace evidence rather
+than LLM claims.
+
+Step 7 should derive:
+
+```text
+finalOutcome
+filesChanged
+validationPassed
+humanInterventionRequired
+```
+
+from accepted execution evidence without changing acceptance semantics.
 
 # Release Procedure — v0.1.0-alpha.7
 
