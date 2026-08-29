@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 4 accepted
+**Task status:** ✅ H0-003 Step 5 accepted
 
 ---
 
@@ -7392,6 +7392,460 @@ BenchmarkTask
 ```
 
 without yet conflating validation-command execution or acceptance evaluation.
+
+## H0-003 Step 5 — Benchmark Run Orchestration
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Compose the already-accepted H0-003 boundaries into one minimal benchmark
+execution lifecycle:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+HarnessRunResult
+  ↓
+cleanup()
+```
+
+Step 5 proves lifecycle orchestration only.
+
+It must not yet execute validation commands, derive benchmark observations, or
+evaluate acceptance.
+
+### Architectural rule
+
+The orchestration layer owns sequencing and cleanup.
+
+It must not duplicate logic already owned by:
+
+```text
+task-adapter.ts
+workspace resolver
+runHarness(...)
+```
+
+The orchestration should therefore remain thin.
+
+### Preferred API
+
+Create:
+
+```text
+src/benchmarks/run-benchmark.ts
+```
+
+Preferred shape:
+
+```ts
+type RunBenchmarkRequest = Readonly<{
+  benchmark: BenchmarkTask;
+}>;
+
+type RunBenchmarkDependencies = Readonly<{
+  workspaceResolver: BenchmarkWorkspaceResolver;
+  runHarness?: typeof runHarness;
+}>;
+
+async function runBenchmark(
+  request: RunBenchmarkRequest,
+  dependencies: RunBenchmarkDependencies,
+): Promise<HarnessRunResult>
+```
+
+Exact names may be refined by implementation evidence, but the following are
+required:
+
+```text
+BenchmarkTask input
+workspace resolver dependency
+runHarness dependency/injection seam
+HarnessRunResult output
+cleanup in finally
+```
+
+### Sequencing contract
+
+The orchestration must execute in this order:
+
+```text
+1. adapt BenchmarkTask → NormalizedHarnessTask
+2. resolve BenchmarkRepositoryRef → isolated workspace
+3. call runHarness({ task, workspace })
+4. return HarnessRunResult
+5. cleanup workspace in finally
+```
+
+Cleanup must happen when:
+
+```text
+runHarness succeeds
+runHarness throws
+```
+
+### Failure semantics
+
+If workspace resolution fails:
+
+```text
+runHarness must not execute
+cleanup is resolver-owned for partial resolution failure
+original resolution error propagates
+```
+
+If `runHarness(...)` fails:
+
+```text
+cleanup must execute
+original Harness error propagates after cleanup
+```
+
+If cleanup itself fails after a successful Harness run:
+
+```text
+cleanup failure must not be silently swallowed
+```
+
+If cleanup fails while a Harness error is already propagating, Step 5 must
+characterize and document the chosen behavior instead of inventing a generic
+error aggregation framework.
+
+Prefer preserving the primary Harness error if the implementation can do so
+without adding broad error infrastructure.
+
+### Dependency injection
+
+The deterministic test must not invoke a real provider or graph.
+
+Use:
+
+```text
+fake BenchmarkWorkspaceResolver
+fake/injected runHarness
+```
+
+The fake `runHarness` should prove the exact inputs passed by orchestration.
+
+No Git fixture is required in this step because Git lifecycle was already
+accepted in Step 4.
+
+### Required deterministic tests
+
+Create:
+
+```text
+src/test-h0-003-run-benchmark.ts
+```
+
+The tests must prove:
+
+```text
+BenchmarkTask is adapted before execution
+source becomes benchmark
+repository identity is preserved
+resolved workspace path is passed to runHarness
+runHarness is invoked exactly once on success
+HarnessRunResult is returned unchanged
+cleanup runs after success
+cleanup runs after runHarness failure
+runHarness is not called when workspace resolution fails
+resolution failure propagates
+Harness failure propagates
+cleanup failure after success propagates
+validationCommands are not executed
+benchmark acceptance is not evaluated
+graph internals are not imported directly
+```
+
+### Production boundaries
+
+Step 5 may import:
+
+```text
+BenchmarkTask
+adaptBenchmarkTaskToHarnessTask
+BenchmarkWorkspaceResolver
+runHarness
+HarnessRunResult
+```
+
+Step 5 must not import:
+
+```text
+graph internals
+providers
+benchmark acceptance evaluator
+child_process
+filesystem
+Git resolver implementation directly
+```
+
+The caller supplies the workspace resolver implementation.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/run-benchmark.ts
+src/test-h0-003-run-benchmark.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/cases.ts
+src/benchmarks/task-adapter.ts
+src/benchmarks/git-worktree-workspace.ts
+src/benchmarks/acceptance.ts
+src/intake/*
+src/app/run-harness.ts
+src/telemetry/*
+src/graph/*
+src/providers/*
+```
+
+unless the deterministic test exposes a concrete pre-existing boundary defect.
+
+### Non-goals
+
+Do not yet:
+
+- execute benchmark validation commands;
+- calculate Git diff/filesChanged;
+- derive `finalOutcome`;
+- derive `humanInterventionRequired`;
+- construct `BenchmarkRunObservation`;
+- call `evaluateBenchmarkAcceptance(...)`;
+- run B01-B05 end-to-end;
+- build comparison reports;
+- change telemetry schema;
+- add job scheduling or concurrency;
+- change provider/model selection.
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/run-benchmark.ts` exists.
+- [x] orchestration accepts one `BenchmarkTask`.
+- [x] orchestration uses the accepted task adapter.
+- [x] orchestration uses injected `BenchmarkWorkspaceResolver`.
+- [x] orchestration calls `runHarness(...)` through the application boundary.
+- [x] normalized task source is `benchmark`.
+- [x] resolved workspace is passed unchanged to `runHarness(...)`.
+- [x] `HarnessRunResult` is returned unchanged.
+- [x] cleanup runs after successful Harness execution.
+- [x] cleanup runs after failed Harness execution.
+- [x] workspace resolution failure prevents Harness execution.
+- [x] resolution failure propagates.
+- [x] Harness failure propagates.
+- [x] cleanup failure after success propagates.
+- [x] no validation command executes.
+- [x] no benchmark acceptance evaluation occurs.
+- [x] no graph-internal import occurs.
+- [x] no provider call occurs in deterministic tests.
+- [x] no Git/filesystem/process implementation is added.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Steps 1-4 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-run-benchmark && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): orchestrate harness run lifecycle"
+```
+
+### Exit condition
+
+Step 5 is accepted when benchmark task adaptation, isolated workspace
+resolution, Harness execution, and guaranteed cleanup are proven as one thin
+lifecycle without pulling validation or scoring concerns into the same layer.
+
+**Expected next step:**
+
+```text
+H0-003 Step 6 — Benchmark Validation Command Execution
+```
+
+Step 6 should add deterministic post-Harness validation execution while keeping
+acceptance evaluation separate.
+
+## H0-003 Step 5 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented lifecycle:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+HarnessRunResult
+  ↓
+cleanup() in finally
+```
+
+The orchestration is intentionally thin.
+
+It owns only sequencing and cleanup.
+
+Deterministic dependency seams:
+
+```text
+BenchmarkWorkspaceResolver
+BenchmarkHarnessExecutor
+```
+
+allow the Step 5 test to prove the lifecycle without invoking a real provider,
+graph, Git implementation, filesystem mutation, or validation command.
+
+Failure behavior is characterized as:
+
+```text
+workspace resolution failure
+  → runHarness is not called
+  → original resolution failure propagates
+
+Harness failure
+  → cleanup runs
+  → original Harness failure propagates
+
+cleanup failure after Harness success
+  → cleanup failure propagates
+
+Harness failure + cleanup failure
+  → primary Harness failure is preserved
+```
+
+Step 5 does not import or execute:
+
+```text
+validationCommands
+benchmark acceptance
+BenchmarkRunObservation
+Git worktree implementation
+graph internals
+providers
+```
+
+Validation execution and benchmark observation remain deferred.
+
+## H0-003 Step 5 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 5 development-environment gate passed with deterministic fake
+dependencies and no provider, graph, Git, filesystem, or validation-command
+execution.
+
+Accepted lifecycle:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+HarnessRunResult
+  ↓
+cleanup() in finally
+```
+
+Verified failure semantics:
+
+```text
+workspace resolution failure
+  → runHarness is not called
+  → original resolution failure propagates
+
+Harness failure
+  → cleanup runs
+  → original Harness failure propagates
+
+cleanup failure after Harness success
+  → cleanup failure propagates
+
+Harness failure + cleanup failure
+  → primary Harness failure is preserved
+```
+
+The orchestration remains intentionally thin and does not import or execute:
+
+```text
+validationCommands
+BenchmarkRunObservation
+evaluateBenchmarkAcceptance(...)
+Git worktree implementation
+graph internals
+providers
+```
+
+### Step 6 direction
+
+Proceed to:
+
+```text
+H0-003 Step 6 — Benchmark Validation Command Execution
+```
+
+Step 6 should introduce deterministic post-Harness validation execution in the
+resolved workspace while keeping observation construction and acceptance
+evaluation outside the same slice.
+
+The validation layer should characterize:
+
+```text
+ordered command execution
+working-directory ownership
+stdout/stderr capture
+exit status
+short-circuit vs continue policy
+no shell interpolation unless explicitly required by benchmark command format
+no provider/model concerns
+```
+
+Only after validation execution is accepted should H0-003 derive the remaining
+`BenchmarkRunObservation` fields and call the existing acceptance evaluator.
 
 # Release Procedure — v0.1.0-alpha.7
 
