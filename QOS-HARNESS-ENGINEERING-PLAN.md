@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 1 accepted
+**Task status:** ✅ H0-003 Step 2 accepted
 
 ---
 
@@ -6101,6 +6101,330 @@ The next slice must only map an already-valid `BenchmarkTask` into one
 
 It must not yet resolve repositories, create worktrees, execute validations,
 call providers, or evaluate benchmark acceptance.
+
+## H0-003 Step 2 — Benchmark Task Adapter
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Introduce the smallest deterministic adapter from the fixed H0-002
+`BenchmarkTask` contract into the H0-002A `NormalizedHarnessTask` contract.
+
+This step connects benchmark task identity to the shared Harness intake domain.
+It does not execute a benchmark.
+
+### Accepted mapping
+
+```text
+BenchmarkTask.id
+  → NormalizedHarnessTask.id
+
+source
+  → "benchmark"
+
+BenchmarkTask.repository.id
+BenchmarkTask.repository.revision
+  → NormalizedHarnessTask.repository
+
+BenchmarkTask.task
+  → NormalizedHarnessTask.request
+
+BenchmarkTask.constraints
+  → NormalizedHarnessTask.constraints
+
+BenchmarkTask.successCriteria
+  → NormalizedHarnessTask.acceptanceCriteria
+```
+
+The adapter must delegate validation/normalization to the existing deterministic
+`normalizeHarnessTask(...)` boundary rather than duplicate its rules.
+
+### Benchmark-only data
+
+These fields remain outside `NormalizedHarnessTask`:
+
+```text
+title
+difficulty
+validationCommands
+expectedOutcome
+```
+
+They belong to benchmark selection/reporting/execution/acceptance.
+
+Step 2 does not copy them into metadata merely because metadata exists.
+
+A future reporting requirement may justify selected opaque metadata, but that
+must be evidence-driven and separate from this adapter.
+
+### Production shape
+
+Create:
+
+```text
+src/benchmarks/task-adapter.ts
+```
+
+Preferred API:
+
+```ts
+adaptBenchmarkTaskToHarnessTask(
+  benchmark: BenchmarkTask,
+): NormalizedHarnessTask
+```
+
+The function must remain pure apart from deterministic normalization.
+
+### Tests
+
+Create:
+
+```text
+src/test-h0-003-benchmark-task-adapter.ts
+```
+
+The deterministic test must prove:
+
+```text
+id mapping
+source = benchmark
+repository id/revision mapping
+task → request
+constraints mapping
+successCriteria → acceptanceCriteria
+metadata remains empty
+validationCommands do not leak
+expectedOutcome does not leak
+title/difficulty do not leak
+normalizer errors propagate deterministically
+fixed B01-B05 cases can all be adapted
+```
+
+No provider, graph, filesystem, Git or command execution is allowed.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/task-adapter.ts
+src/test-h0-003-benchmark-task-adapter.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/acceptance.ts
+src/intake/contracts.ts
+src/intake/normalize.ts
+src/app/run-harness.ts
+```
+
+### Non-goals
+
+Do not:
+
+- resolve repository IDs;
+- clone repositories;
+- create Git worktrees;
+- create temporary directories;
+- execute `runHarness(...)`;
+- execute validation commands;
+- derive `BenchmarkRunObservation`;
+- evaluate benchmark acceptance;
+- add runner orchestration;
+- add benchmark metadata to the normalized task without evidence;
+- change the fixed B01-B05 suite;
+- change task normalization semantics.
+
+### Acceptance criteria
+
+- [x] `src/benchmarks/task-adapter.ts` exists.
+- [x] adapter accepts one `BenchmarkTask`.
+- [x] adapter returns one `NormalizedHarnessTask`.
+- [x] adapter delegates to `normalizeHarnessTask(...)`.
+- [x] source is always `benchmark`.
+- [x] benchmark `id` maps to normalized task `id`.
+- [x] benchmark repository `id + revision` map unchanged.
+- [x] benchmark `task` maps to `request`.
+- [x] constraints map unchanged after normalizer trimming.
+- [x] success criteria map to acceptance criteria.
+- [x] normalized metadata is empty.
+- [x] `title` does not leak into normalized task.
+- [x] `difficulty` does not leak into normalized task.
+- [x] `validationCommands` do not leak into normalized task.
+- [x] `expectedOutcome` does not leak into normalized task.
+- [x] all fixed B01-B05 tasks adapt successfully.
+- [x] malformed benchmark task input still receives deterministic normalizer errors.
+- [x] no Git/filesystem/process/provider call occurs.
+- [x] no new runtime dependency is added.
+- [x] H0-003 Step 1 characterization remains green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): adapt tasks to harness intake"
+```
+
+### Exit condition
+
+Step 2 is accepted when every fixed benchmark can cross the shared normalized
+task boundary without carrying benchmark execution/scoring concerns with it.
+
+## H0-003 Step 2 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented boundary:
+
+```text
+BenchmarkTask
+    ↓
+adaptBenchmarkTaskToHarnessTask(...)
+    ↓
+normalizeHarnessTask(...)
+    ↓
+NormalizedHarnessTask
+```
+
+The adapter performs no benchmark execution.
+
+It intentionally excludes:
+
+```text
+title
+difficulty
+validationCommands
+expectedOutcome
+```
+
+from both normalized top-level fields and metadata.
+
+The adapter relies on the existing task normalizer for trimming, repository
+identity validation, blank-field validation, and stable issue codes.
+
+The deterministic test covers one synthetic mapping, all fixed B01-B05 cases,
+benchmark-only-field non-leakage, and malformed-input error propagation.
+
+## H0-003 Step 2 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 2 development-environment gate passed after one test-only correction
+to use the actual fixed-suite export:
+
+```text
+benchmarkCases
+```
+
+instead of the initially assumed:
+
+```text
+BENCHMARK_TASKS
+```
+
+No production behavior changed.
+
+Accepted production boundary:
+
+```text
+BenchmarkTask
+    ↓
+adaptBenchmarkTaskToHarnessTask(...)
+    ↓
+normalizeHarnessTask(...)
+    ↓
+NormalizedHarnessTask
+```
+
+Accepted mapping:
+
+```text
+id
+  → id
+
+source
+  → benchmark
+
+repository.id + repository.revision
+  → repository.id + repository.revision
+
+task
+  → request
+
+constraints
+  → constraints
+
+successCriteria
+  → acceptanceCriteria
+```
+
+Benchmark-only concerns remain outside the normalized Harness task:
+
+```text
+title
+difficulty
+validationCommands
+expectedOutcome
+```
+
+They are not copied into metadata.
+
+The deterministic test proves:
+
+```text
+synthetic mapping
+B01-B05 adaptation
+normalizer trimming
+stable normalization errors
+no benchmark-only field leakage
+```
+
+### Step 3 direction
+
+Proceed to:
+
+```text
+H0-003 Step 3 — Benchmark Workspace Resolver Contract
+```
+
+Step 3 should define the repository/revision → isolated `ResolvedWorkspace`
+boundary and its lifecycle semantics before implementing real Git worktrees.
+
+The contract should make cleanup ownership, baseline immutability, revision
+verification, and isolation explicit.
+
+Step 3 should remain contract/characterization-first. Real Git mutation should
+follow only after that contract is accepted.
+
+**Expected next step:** define the benchmark workspace resolver contract and its
+isolation semantics before implementing Git worktrees.
 
 # Release Procedure — v0.1.0-alpha.7
 
