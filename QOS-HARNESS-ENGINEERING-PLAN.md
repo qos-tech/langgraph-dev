@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-003 Step 3 accepted
+**Task status:** ✅ H0-003 Step 4 accepted
 
 ---
 
@@ -6848,6 +6848,550 @@ H0-003 Step 4 — Git Worktree Workspace Resolver
 
 Step 4 must implement the accepted contract with deterministic local Git
 fixtures before any full benchmark orchestration is introduced.
+
+## H0-003 Step 4 — Git Worktree Workspace Resolver
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Implement the accepted `BenchmarkWorkspaceResolver` contract using local Git
+worktrees and deterministic local repository fixtures.
+
+This is the first H0-003 step that performs real workspace mutation.
+
+The implementation must prove isolation and revision correctness before any
+full benchmark runner orchestration is introduced.
+
+### Accepted contract
+
+Step 3 established:
+
+```text
+BenchmarkWorkspaceRequest
+  → repository: BenchmarkRepositoryRef
+
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+ResolvedBenchmarkWorkspace
+  → workspace: ResolvedWorkspace
+  → cleanup(): Promise<void>
+```
+
+Step 4 implements that boundary.
+
+### Architectural split
+
+The worktree resolver needs two independent concerns:
+
+```text
+repository identity
+  → source repository lookup
+
+source repository + revision
+  → isolated Git worktree
+```
+
+Do not collapse these concepts by treating `BenchmarkRepositoryRef.id` as an
+absolute local path.
+
+Preferred direction:
+
+```ts
+type BenchmarkRepositoryLocator = Readonly<{
+  locate(repositoryId: string): Promise<string>;
+}>;
+```
+
+and:
+
+```text
+GitWorktreeBenchmarkWorkspaceResolver
+  → BenchmarkRepositoryLocator
+  → Git command runner
+  → workspace root allocator
+```
+
+The exact helper names may be refined by implementation evidence, but repository
+identity lookup must remain injectable and independent from worktree mechanics.
+
+### Concrete resolver responsibilities
+
+The Step 4 resolver must:
+
+1. locate the source repository for `repository.id`;
+2. verify the requested `repository.revision`;
+3. create a fresh isolated worktree at that exact revision;
+4. return the worktree path through `ResolvedWorkspace.repositoryPath`;
+5. preserve the source/baseline checkout;
+6. expose cleanup that removes the worktree;
+7. handle partial-failure cleanup deterministically where possible.
+
+### Git execution policy
+
+Use the system Git CLI through Node process execution.
+
+No new Git library dependency should be added.
+
+Preferred commands should be explicit argument arrays rather than shell command
+strings.
+
+Expected operations may include:
+
+```text
+git -C <source> rev-parse --verify <revision>^{commit}
+git -C <source> worktree add --detach <workspace> <resolved-commit>
+git -C <source> worktree remove --force <workspace>
+git -C <source> worktree prune
+```
+
+Exact command sequence must be driven by tests.
+
+Do not use shell interpolation for repository paths, revisions, or worktree
+paths.
+
+### Revision semantics
+
+The resolver must not merely trust the requested revision string.
+
+It must resolve/verify the revision before Harness execution.
+
+The isolated workspace must start at the exact commit that Git resolves for the
+requested benchmark revision.
+
+The deterministic test should compare:
+
+```text
+requested revision
+  → source repository resolved commit
+
+workspace HEAD
+  → same commit
+```
+
+### Isolation semantics
+
+The deterministic fixture test must prove all of the following:
+
+#### Fresh workspace
+
+Two sequential resolutions must not reuse the same execution directory.
+
+#### Source checkout immutability
+
+After mutating a file inside the resolved worktree:
+
+```text
+source repository working tree
+  → unchanged
+
+source repository HEAD
+  → unchanged
+```
+
+#### Workspace independence
+
+Mutating one resolved worktree must not alter another resolved worktree.
+
+#### Detached execution
+
+The benchmark worktree should not move a source branch merely because the
+Harness modifies files.
+
+A detached worktree is the preferred baseline.
+
+### Workspace root
+
+Worktree directories must live outside the source repository working tree.
+
+The resolver should receive an explicit workspace root from outer benchmark
+infrastructure rather than silently using the current project directory.
+
+For deterministic tests, use a temporary root created by the test.
+
+The production resolver itself should not mutate process-wide `cwd`.
+
+### Cleanup semantics
+
+Cleanup must:
+
+```text
+remove the Git worktree
+remove/prune Git worktree registration as needed
+be awaitable
+```
+
+The first implementation should aim for idempotency.
+
+Calling cleanup twice should not corrupt the source repository or fail merely
+because the workspace has already been removed.
+
+If exact idempotency cannot be implemented safely with current evidence, the
+test must characterize the chosen behavior before acceptance.
+
+### Partial failures
+
+If worktree creation fails after allocating a target directory or registering a
+worktree, the resolver must make a best-effort cleanup before propagating the
+original failure.
+
+Do not swallow the original error.
+
+### Repository locator
+
+Step 4 may include a minimal deterministic locator implementation only if
+required for local execution.
+
+Preferred production boundary:
+
+```text
+BenchmarkRepositoryLocator
+```
+
+with tests using an in-memory/static mapping:
+
+```text
+fixture-repository
+  → /tmp/.../source
+```
+
+Do not introduce:
+
+```text
+GitHub
+remote clone
+HTTP download
+database repository catalog
+Q-Flow repository registry
+```
+
+Those remain outside Step 4.
+
+### Process execution boundary
+
+Git command execution should be injectable for focused tests if the resulting
+abstraction remains small.
+
+Avoid creating a generic command-execution framework.
+
+A narrow Git runner abstraction is acceptable only when it directly improves:
+
+```text
+argument safety
+deterministic failure tests
+cleanup tests
+```
+
+### Files
+
+Expected new production files:
+
+```text
+src/benchmarks/git-worktree-workspace.ts
+```
+
+Step 4 may extend:
+
+```text
+src/benchmarks/workspace.ts
+```
+
+only for a repository-locator contract if justified.
+
+Expected deterministic test:
+
+```text
+src/test-h0-003-git-worktree-workspace.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+### Production boundaries that must remain unchanged
+
+Do not modify:
+
+```text
+src/benchmarks/cases.ts
+src/benchmarks/task-adapter.ts
+src/benchmarks/acceptance.ts
+src/intake/*
+src/app/run-harness.ts
+src/telemetry/*
+src/graph/*
+src/providers/*
+```
+
+unless the Step 4 deterministic gate exposes a concrete pre-existing contract
+defect.
+
+### Non-goals
+
+Do not yet:
+
+- execute `runHarness(...)`;
+- execute benchmark validation commands;
+- derive `BenchmarkRunObservation`;
+- evaluate benchmark acceptance;
+- run the complete B01-B05 suite;
+- clone remote repositories;
+- fetch Git remotes;
+- add GitHub/Q-Flow integrations;
+- add a generic job queue;
+- change telemetry schema;
+- change benchmark definitions;
+- change provider/model behavior;
+- introduce comparison reporting.
+
+### Deterministic fixture strategy
+
+The test must create its own temporary local Git repository.
+
+Suggested fixture lifecycle:
+
+```text
+mkdtemp
+  ↓
+git init
+  ↓
+configure local test user
+  ↓
+create commit A
+  ↓
+tag or reference benchmark revision
+  ↓
+create source working-tree state
+  ↓
+resolve isolated benchmark worktree
+  ↓
+assert exact HEAD
+  ↓
+mutate isolated worktree
+  ↓
+assert source untouched
+  ↓
+cleanup
+  ↓
+assert worktree removed
+  ↓
+remove temp fixture root
+```
+
+The test may execute the local Git binary.
+
+It must not require network access.
+
+### Acceptance criteria
+
+- [x] concrete Git worktree resolver exists.
+- [x] resolver implements `BenchmarkWorkspaceResolver`.
+- [x] repository identity lookup is separate from local path identity.
+- [x] repository locator is injectable/deterministic.
+- [x] workspace root is explicit.
+- [x] requested revision is verified before Harness execution.
+- [x] resulting worktree HEAD equals the resolved requested commit.
+- [x] worktree is isolated from source checkout.
+- [x] source checkout remains unchanged after worktree mutation.
+- [x] two resolutions produce distinct workspace directories.
+- [x] one worktree mutation does not affect another.
+- [x] execution worktree is detached from source branch movement.
+- [x] cleanup removes the worktree.
+- [x] cleanup is safe when invoked after normal resolution.
+- [x] cleanup behavior after repeated invocation is characterized.
+- [x] partial creation failure performs best-effort cleanup.
+- [x] original creation failure is propagated.
+- [x] resolver does not change process-wide `cwd`.
+- [x] Git arguments are passed without shell interpolation.
+- [x] no network access is required.
+- [x] no new runtime dependency is added.
+- [x] no Harness/provider call occurs.
+- [x] H0-003 Steps 1-3 remain green.
+- [x] H0-002A/H0-002 regression remains green.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): resolve isolated git worktrees"
+```
+
+### Exit condition
+
+Step 4 is accepted only when a deterministic local Git fixture proves exact
+revision execution, source immutability, independent worktrees, and cleanup.
+
+Only after that may H0-003 begin composing workspace resolution with
+`runHarness(...)`.
+
+## H0-003 Step 4 Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented infrastructure:
+
+```text
+BenchmarkRepositoryLocator
+  ↓
+GitWorktreeBenchmarkWorkspaceResolver
+  ↓
+system Git CLI (execFile argument arrays)
+  ↓
+detached isolated worktree
+```
+
+The resolver:
+
+```text
+locates repository id through an injected locator
+verifies repository.revision to an exact commit
+allocates a unique path under an explicit workspace root
+creates a detached Git worktree
+verifies worktree HEAD equals the resolved commit
+returns ResolvedWorkspace.repositoryPath
+owns explicit awaitable cleanup
+makes repeated successful cleanup a no-op
+performs best-effort cleanup on partial resolution failure
+rethrows the original resolution failure
+```
+
+The production implementation uses no shell command strings and adds no runtime
+dependency.
+
+The deterministic test creates a temporary local Git repository and proves:
+
+```text
+exact revision
+detached worktree
+fresh path per resolution
+source checkout immutability
+cross-worktree isolation
+cleanup removes path and registration
+repeated cleanup is safe
+partial failure attempts cleanup and prune
+original failure remains observable
+process cwd is unchanged
+no network is required
+```
+
+Harness execution, benchmark validation commands, observation derivation, and
+acceptance evaluation remain deferred.
+
+## H0-003 Step 4 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 4 development-environment gate passed after one test-only TypeScript
+correction that made the `failedCommands` collection mutable.
+
+No production behavior changed after the implementation patch.
+
+Accepted infrastructure:
+
+```text
+BenchmarkRepositoryLocator
+  ↓
+GitWorktreeBenchmarkWorkspaceResolver
+  ↓
+system Git CLI via execFile argument arrays
+  ↓
+detached isolated worktree
+```
+
+Verified behavior:
+
+```text
+repository id lookup remains separate from local path identity
+requested benchmark revision is resolved to an exact commit
+worktree HEAD equals the resolved commit
+worktree runs detached
+two resolutions receive distinct paths
+source checkout HEAD remains unchanged
+source checkout working tree remains unchanged
+mutating one worktree does not affect another
+cleanup removes worktree path and Git registration
+repeated cleanup is safe
+partial resolution failure attempts best-effort cleanup
+original resolution failure remains observable
+process-wide cwd remains unchanged
+no network is required
+no runtime dependency was added
+```
+
+### Step 5 direction
+
+Proceed to:
+
+```text
+H0-003 Step 5 — Benchmark Run Orchestration
+```
+
+Step 5 should compose only:
+
+```text
+BenchmarkTask
+  ↓
+adaptBenchmarkTaskToHarnessTask(...)
+  ↓
+BenchmarkWorkspaceResolver.resolve(...)
+  ↓
+runHarness(...)
+  ↓
+HarnessRunResult
+  ↓
+workspace cleanup
+```
+
+The orchestration must guarantee cleanup with `try/finally`.
+
+Step 5 must still keep these concerns outside the orchestration slice:
+
+```text
+validation command execution
+Git diff / filesChanged observation derivation
+BenchmarkRunObservation construction
+benchmark acceptance evaluation
+comparison reporting
+```
+
+Those should be introduced as later H0-003 slices after the execution lifecycle
+is proven independently.
+
+**Expected next step:**
+
+```text
+H0-003 Step 5 — Benchmark Run Orchestration
+```
+
+Step 5 should connect:
+
+```text
+BenchmarkTask
+  → task adapter
+  → workspace resolver
+  → runHarness(...)
+```
+
+without yet conflating validation-command execution or acceptance evaluation.
 
 # Release Procedure — v0.1.0-alpha.7
 

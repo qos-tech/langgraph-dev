@@ -51,7 +51,8 @@
     "test:h0-002a-acceptance": "tsx src/test-h0-002a-acceptance.ts",
     "test:h0-003-runner-boundary-characterization": "tsx src/test-h0-003-runner-boundary-characterization.ts",
     "test:h0-003-benchmark-task-adapter": "tsx src/test-h0-003-benchmark-task-adapter.ts",
-    "test:h0-003-workspace-contract": "tsx src/test-h0-003-workspace-contract.ts"
+    "test:h0-003-workspace-contract": "tsx src/test-h0-003-workspace-contract.ts",
+    "test:h0-003-git-worktree-workspace": "tsx src/test-h0-003-git-worktree-workspace.ts"
   },
   "keywords": [],
   "author": "",
