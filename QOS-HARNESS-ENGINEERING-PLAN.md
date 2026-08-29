@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-002A accepted
+**Task status:** ✅ H0-003 Step 1 accepted
 
 ---
 
@@ -5588,6 +5588,519 @@ release decision based on actual scope
    ↓
 H0-003 Benchmark Runner
 ```
+
+# H0-003 — Benchmark Runner
+
+## Status
+
+**Milestone:** H0
+**Current step:** Step 1 — Characterize Runner Boundary
+**Release baseline:** `v0.1.0-alpha.7 — Task Intake Foundation Alpha`
+
+## Milestone objective
+
+Execute the fixed H0-002 benchmark suite reproducibly through the same
+application boundary used by normal Harness tasks.
+
+The Benchmark Runner must add repository/revision resolution, isolated
+workspaces, validation-command execution, observation capture, and benchmark
+acceptance without creating a benchmark-only graph path.
+
+Target architecture:
+
+```text
+BenchmarkTask
+    ↓
+benchmark adapter
+    ↓
+NormalizedHarnessTask
+
+BenchmarkTask.repository
+    ↓
+workspace resolver
+    ↓
+isolated ResolvedWorkspace
+
+NormalizedHarnessTask + ResolvedWorkspace
+    ↓
+runHarness(...)
+    ↓
+HarnessRunResult
+
+benchmark validation commands
+    ↓
+BenchmarkObservation
+    ↓
+evaluateBenchmarkAcceptance(...)
+```
+
+## Milestone non-goals
+
+H0-003 must not:
+
+- change benchmark task definitions or expected outcomes merely to make runs pass;
+- change benchmark acceptance semantics;
+- change planner/reviewer/refiner prompts;
+- change provider/model strategy;
+- implement Repository Intelligence;
+- implement the Context Engine;
+- add comparison/reporting UI;
+- add dynamic routing;
+- add a job queue;
+- add self-improvement;
+- let benchmark code call graph internals directly;
+- put machine-local workspace paths into benchmark/task identity.
+
+---
+
+## H0-003 Step 1 — Characterize Runner Boundary
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Freeze the exact contracts and ownership boundaries H0-003 must connect before
+introducing Git/worktree execution code.
+
+This is a characterization/specification step.
+
+No production behavior changes are allowed.
+
+### Evidence to characterize
+
+Step 1 must inspect the current accepted alpha.7 source for:
+
+```text
+src/benchmarks/contracts.ts
+src/benchmarks/cases.ts
+src/benchmarks/acceptance.ts
+src/benchmarks/suite-validation.ts
+
+src/intake/contracts.ts
+src/intake/normalize.ts
+
+src/app/run-harness.ts
+
+src/telemetry/contracts.ts
+src/telemetry/store.ts
+```
+
+and the existing benchmark/intake/application acceptance tests.
+
+### Questions Step 1 must answer
+
+#### 1. Benchmark → normalized task adapter
+
+Determine the exact existing fields that map directly from `BenchmarkTask` to
+`NormalizedHarnessTask`.
+
+The adapter must preserve benchmark identity and request semantics without
+moving benchmark-only execution data into the normalized domain contract.
+
+Expected direction:
+
+```text
+BenchmarkTask.id
+  → NormalizedHarnessTask.id
+
+source
+  → benchmark
+
+BenchmarkTask.repository.id
+BenchmarkTask.repository.revision
+  → NormalizedHarnessTask.repository
+
+BenchmarkTask.request/task text
+  → NormalizedHarnessTask.request
+```
+
+The exact field names must come from current source evidence.
+
+#### 2. Workspace resolution ownership
+
+Characterize what H0-003 must resolve from:
+
+```text
+repository.id + revision
+```
+
+into:
+
+```text
+ResolvedWorkspace.repositoryPath
+```
+
+Resolution belongs to benchmark infrastructure, not task normalization and not
+`runHarness(...)`.
+
+Step 1 must explicitly reject these designs:
+
+```text
+NormalizedHarnessTask.repositoryPath
+runHarness resolves Git repository identity
+benchmark code calls graph directly
+```
+
+#### 3. Isolation contract
+
+Define the minimum observable properties of a reproducible benchmark workspace.
+
+At minimum the later resolver must be able to prove:
+
+```text
+fresh isolated working directory
+requested repository/revision checked out
+benchmark mutations cannot affect the source/baseline checkout
+workspace can be cleaned deterministically
+```
+
+Step 1 does not implement worktrees yet.
+
+#### 4. Validation-command ownership
+
+Characterize where validation commands currently live in `BenchmarkTask`.
+
+Validation execution happens after Harness execution and remains benchmark
+infrastructure.
+
+It must not become:
+
+```text
+NormalizedHarnessTask.metadata interpreted by Harness core
+graph node behavior
+runHarness concern
+```
+
+#### 5. Observation boundary
+
+Characterize the data already available after a run:
+
+```text
+HarnessRunResult.state
+HarnessRunResult.telemetry
+HarnessRunResult.persistedTelemetry
+Git/workspace diff (future H0-003 infrastructure)
+validation command results (future H0-003 infrastructure)
+human intervention flag / final benchmark outcome inputs
+```
+
+Determine the smallest future `BenchmarkObservation` required by the already
+accepted H0-002 acceptance function.
+
+Do not redesign acceptance rules in Step 1.
+
+#### 6. Runner orchestration ownership
+
+The future runner should own sequencing only:
+
+```text
+select benchmark
+adapt task
+resolve isolated workspace
+runHarness(...)
+execute benchmark validations
+capture diff/observation
+evaluate existing acceptance
+cleanup workspace
+```
+
+It must not own planner/provider logic.
+
+### Step 1 production rule
+
+No production source change.
+
+Step 1 may add only a deterministic characterization test and PLAN metadata.
+
+Expected test:
+
+```text
+src/test-h0-003-runner-boundary-characterization.ts
+```
+
+The test should use source inspection and existing contracts only.
+
+No Git clone/worktree command and no provider call should run in Step 1.
+
+### Acceptance criteria
+
+- [x] current `BenchmarkTask` identity/repository/request fields are explicitly characterized.
+- [x] exact benchmark validation fields are characterized.
+- [x] exact current acceptance-input/observation fields are characterized.
+- [x] normalized task mapping is defined from source evidence.
+- [x] benchmark source is explicitly `benchmark`.
+- [x] repository identity and concrete workspace remain separate.
+- [x] workspace resolution ownership is assigned to H0-003 infrastructure.
+- [x] validation-command execution is outside `runHarness(...)`.
+- [x] `runHarness(...)` remains the only Harness execution application boundary.
+- [x] benchmark runner is forbidden from importing graph internals.
+- [x] benchmark-specific validation data is forbidden from leaking into `NormalizedHarnessTask`.
+- [x] isolation requirements are recorded before implementation.
+- [x] no production source changes.
+- [x] no provider call.
+- [x] no Git mutation/worktree creation.
+- [x] no new runtime dependency.
+- [x] H0-002A acceptance remains green.
+- [x] H0-002 benchmark acceptance remains green.
+- [x] H0-001 telemetry/H-ARCH regression remains green.
+
+### Targeted gate
+
+After the characterization test is implemented:
+
+```bash
+npm run typecheck && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance && \
+npm run test:benchmark-suite-validation && \
+npm run test:benchmark-acceptance && \
+npm run test:benchmark-contract
+```
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "test(benchmark): characterize runner boundary"
+```
+
+### Exit condition
+
+Step 1 is complete only when we can define the next implementation slice from
+observed contracts rather than assumptions.
+
+Expected Step 2 decision after evidence:
+
+```text
+Benchmark → NormalizedHarnessTask adapter
+```
+
+or, if source evidence shows workspace resolution must be established first:
+
+```text
+Benchmark Workspace Resolver contract
+```
+
+We will choose between those only after Step 1 characterization.
+
+## H0-003 Step 1 Evidence Record
+
+**Status:** ✅ Accepted
+
+Alpha.7 source evidence establishes the following exact boundary.
+
+### Benchmark contract
+
+Current `BenchmarkTask` owns:
+
+```text
+schemaVersion
+id
+title
+difficulty
+task
+repository:
+  id
+  revision
+constraints[]
+successCriteria[]
+validationCommands[]
+expectedOutcome
+```
+
+Repository revision is mandatory for benchmarks and repository identity remains
+machine-independent.
+
+### Benchmark → normalized task mapping
+
+The source-supported mapping for the next adapter is:
+
+```text
+BenchmarkTask.id
+  → NormalizedHarnessTask.id
+
+source
+  → benchmark
+
+BenchmarkTask.repository
+  → NormalizedHarnessTask.repository
+
+BenchmarkTask.task
+  → NormalizedHarnessTask.request
+
+BenchmarkTask.constraints
+  → NormalizedHarnessTask.constraints
+
+BenchmarkTask.successCriteria
+  → NormalizedHarnessTask.acceptanceCriteria
+```
+
+The following remain benchmark infrastructure and must not enter the normalized
+task domain:
+
+```text
+title
+difficulty
+validationCommands
+expectedOutcome
+```
+
+`title` and `difficulty` may later be retained as opaque adapter metadata only
+if a concrete reporting requirement justifies it. Step 1 does not require that.
+
+### Application boundary
+
+Current application execution is already the required shape:
+
+```text
+RunHarnessRequest
+  → task: NormalizedHarnessTask
+  → workspace: ResolvedWorkspace
+  → execution?
+
+ResolvedWorkspace
+  → repositoryPath
+
+HarnessRunResult
+  → state
+  → telemetry
+  → persistedTelemetry
+```
+
+`runHarness(...)` remains benchmark-neutral and reaches the Harness core only
+through the public graph boundary.
+
+### Observation gap
+
+Current H0-002 acceptance consumes:
+
+```text
+finalOutcome
+filesChanged[]
+validationPassed
+humanInterventionRequired
+```
+
+Current run telemetry directly provides changed-file evidence, but its
+`finalStatus` vocabulary is only:
+
+```text
+completed
+failed
+```
+
+and therefore must not be confused with benchmark outcomes:
+
+```text
+changes_required
+already_satisfied
+blocked
+```
+
+`validationPassed` and `humanInterventionRequired` are not current
+`HarnessRunResult` fields. They remain Benchmark Runner observation concerns.
+
+The exact derivation of `finalOutcome` from terminal Harness state must be
+defined from state/refined-plan evidence in a later H0-003 step rather than
+guessed here.
+
+### Workspace / telemetry finding
+
+Default JSON telemetry persistence roots itself at `process.cwd()`.
+
+`runHarness(...)` already permits telemetry-store injection, so H0-003 does not
+need to put benchmark workspace identity into telemetry contracts or task
+identity merely to isolate benchmark artifacts.
+
+### Step 2 decision
+
+Evidence supports implementing the smallest independent next slice first:
+
+```text
+H0-003 Step 2 — Benchmark Task Adapter
+```
+
+Step 2 should deterministically convert one already-valid `BenchmarkTask` into
+one `NormalizedHarnessTask`.
+
+It must not yet:
+
+```text
+resolve repositories
+create worktrees
+execute validation commands
+run providers
+evaluate benchmark acceptance
+```
+
+Workspace resolver design follows after the adapter boundary is accepted.
+
+## H0-003 Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The Step 1 development-environment gate passed after one test-only TypeScript
+correction that added the explicit `string` parameter and `Promise<string>`
+return type to the source-reading helper.
+
+No production source behavior changed.
+
+Accepted evidence:
+
+```text
+BenchmarkTask
+  → normalized task adapter inputs are known
+
+repository.id + revision
+  → remain machine-independent identity
+
+ResolvedWorkspace.repositoryPath
+  → remains separate runtime execution location
+
+validationCommands
+expectedOutcome
+  → remain benchmark infrastructure
+
+runHarness(...)
+  → remains the single Harness application execution boundary
+
+BenchmarkRunObservation
+  → finalOutcome
+  → filesChanged
+  → validationPassed
+  → humanInterventionRequired
+```
+
+The characterization also confirmed that run telemetry `finalStatus` is only:
+
+```text
+completed
+failed
+```
+
+and must not be conflated with benchmark outcomes:
+
+```text
+changes_required
+already_satisfied
+blocked
+```
+
+### Step 2 decision
+
+Proceed with:
+
+```text
+H0-003 Step 2 — Benchmark Task Adapter
+```
+
+The next slice must only map an already-valid `BenchmarkTask` into one
+`NormalizedHarnessTask`.
+
+It must not yet resolve repositories, create worktrees, execute validations,
+call providers, or evaluate benchmark acceptance.
 
 # Release Procedure — v0.1.0-alpha.7
 

@@ -48,7 +48,8 @@
     "test:h0-002a-task-normalizer": "tsx src/test-h0-002a-task-normalizer.ts",
     "test:h0-002a-run-harness": "tsx src/test-h0-002a-run-harness.ts",
     "test:h0-002a-manual-intake": "tsx src/test-h0-002a-manual-intake.ts",
-    "test:h0-002a-acceptance": "tsx src/test-h0-002a-acceptance.ts"
+    "test:h0-002a-acceptance": "tsx src/test-h0-002a-acceptance.ts",
+    "test:h0-003-runner-boundary-characterization": "tsx src/test-h0-003-runner-boundary-characterization.ts"
   },
   "keywords": [],
   "author": "",
