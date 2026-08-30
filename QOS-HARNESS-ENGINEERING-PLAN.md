@@ -20891,7 +20891,7 @@ Only a green full gate may close the Step 3 implementation commit.
 
 ## H0-004 Step 4 — Comparison Report Contract and Deterministic Rendering
 
-**Status:** 📋 Specification / decision
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -21220,4 +21220,150 @@ execution/report capture.
 
 The final GO / PIVOT / STOP decision remains deferred until real B01-B05
 comparison evidence exists and has been reviewed.
+
+### Step 4 implementation record
+
+Implemented:
+
+```text
+src/benchmarks/report.ts
+src/test-h0-004-comparison-report.ts
+```
+
+and package script:
+
+```text
+test:h0-004-comparison-report
+```
+
+The report factory preserves the exact supplied Step 3 aggregation object and
+the exact ordered Step 2 task-results array. It does not recompute either layer.
+
+Accepted implementation direction pending gate:
+
+```text
+BenchmarkSuiteRunResult
+        +
+BenchmarkSuiteAggregation
+        ↓
+createBenchmarkComparisonReport(...)
+        ↓
+BenchmarkComparisonReport schemaVersion=1
+        ├── deterministic JSON
+        └── deterministic Markdown
+```
+
+JSON uses stable two-space indentation and a trailing newline.
+
+Markdown renders:
+
+```text
+rates
+  → exactly 2 decimal percentage places
+  → null as n/a
+
+unknown nullable aggregate evidence
+  → n/a
+
+known zero
+  → 0
+```
+
+Completed benchmark rejection and infrastructure failure remain distinct task
+states.
+
+The task table preserves original suite order and does not synthesize
+acceptance, validation, intervention, latency, or LLM evidence for
+`infrastructure_failed` tasks.
+
+Terminal Harness failure reasons and infrastructure failure reasons remain
+separate sections.
+
+No persistence, timestamp, report ID, provider execution, benchmark execution,
+aggregation recomputation, acceptance recomputation, or GO/PIVOT/STOP decision
+is introduced.
+
+Run the focused gate before adding acceptance metadata:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+### Step 4 acceptance record
+
+The focused deterministic Step 4 gate passed in the development environment:
+
+```text
+npm run typecheck                         PASS
+npm run test:h0-004-comparison-report    PASS
+npm run test:h0-004-benchmark-aggregation PASS
+npm run test:h0-004-benchmark-suite-runner PASS
+npm run test:h0-004-comparison-contract  PASS
+```
+
+Accepted report boundary:
+
+```text
+BenchmarkSuiteRunResult
+        +
+BenchmarkSuiteAggregation
+        ↓
+BenchmarkComparisonReport schemaVersion=1
+        ├── deterministic JSON
+        └── deterministic Markdown
+```
+
+The report factory preserves the supplied aggregation and ordered task evidence
+rather than recomputing either layer.
+
+Accepted deterministic JSON semantics:
+
+```text
+valid JSON
+two-space indentation
+trailing newline
+stable task order
+no generated timestamp
+no generated report ID
+no environment-derived fields
+```
+
+Accepted Markdown semantics:
+
+```text
+rates
+  → exactly two decimal percentage places
+
+null aggregate evidence
+  → n/a
+
+known zero
+  → 0
+```
+
+Completed benchmark rejection and infrastructure failure remain distinct.
+
+Infrastructure-failed tasks do not receive synthesized acceptance, validation,
+intervention, Harness latency, or LLM evidence.
+
+Terminal Harness failure summaries remain separate from infrastructure failure
+summaries.
+
+Step 4 introduces no report persistence, filesystem naming policy, dashboard,
+HTML/PDF rendering, benchmark execution, provider execution, aggregation
+recomputation, acceptance recomputation, or automatic GO / PIVOT / STOP
+decision.
+
+### Step 4 full-gate requirement
+
+Focused acceptance does not close the implementation commit.
+
+Before committing Step 4, run the complete H0-004 regression gate after this
+acceptance metadata is applied.
+
+Only a green full gate may close the Step 4 implementation commit.
 
