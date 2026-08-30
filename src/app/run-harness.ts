@@ -45,6 +45,7 @@ export type HarnessExecutionOptions = Readonly<{
 export type RunHarnessRequest = Readonly<{
   task: NormalizedHarnessTask;
   workspace: ResolvedWorkspace;
+  environment?: Readonly<Record<string, string>>;
   execution?: HarnessExecutionOptions;
 }>;
 

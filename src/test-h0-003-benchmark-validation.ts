@@ -32,6 +32,9 @@ const successful = await executeBenchmarkValidation(
   {
     repositoryPath: "/isolated/benchmark-validation",
     commands: ["first", "second", "third"],
+    environment: {
+      BENCHMARK_ENV_MARKER: "isolated-value",
+    },
   },
   {
     commandRunner: successfulRunner,
@@ -42,14 +45,23 @@ assert.deepEqual(calls, [
   {
     command: "first",
     cwd: "/isolated/benchmark-validation",
+    environment: {
+      BENCHMARK_ENV_MARKER: "isolated-value",
+    },
   },
   {
     command: "second",
     cwd: "/isolated/benchmark-validation",
+    environment: {
+      BENCHMARK_ENV_MARKER: "isolated-value",
+    },
   },
   {
     command: "third",
     cwd: "/isolated/benchmark-validation",
+    environment: {
+      BENCHMARK_ENV_MARKER: "isolated-value",
+    },
   },
 ]);
 assert.deepEqual(successful, {
@@ -172,6 +184,54 @@ try {
   assert.equal(shellSuccess.commands[0]?.exitCode, 0);
   assert.equal(shellSuccess.commands[0]?.stdout, "stdout-value");
   assert.equal(shellSuccess.commands[0]?.stderr, "stderr-value");
+
+  const inheritedMarker = "BENCHMARK_PARENT_ENV_MARKER";
+  const overrideMarker = "BENCHMARK_OVERRIDE_ENV_MARKER";
+  const previousInheritedMarker = process.env[inheritedMarker];
+  const previousOverrideMarker = process.env[overrideMarker];
+
+  process.env[inheritedMarker] = "parent-value";
+  process.env[overrideMarker] = "parent-override";
+
+  try {
+    const shellEnvironment = await executeBenchmarkValidation(
+      {
+        repositoryPath: fixtureRoot,
+        commands: [
+          'printf "%s|%s" "$BENCHMARK_PARENT_ENV_MARKER" "$BENCHMARK_OVERRIDE_ENV_MARKER"',
+        ],
+        environment: {
+          [overrideMarker]: "isolated-value",
+        },
+      },
+      {
+        commandRunner: shellRunner,
+      },
+    );
+
+    assert.equal(shellEnvironment.passed, true);
+    assert.equal(
+      shellEnvironment.commands[0]?.stdout,
+      "parent-value|isolated-value",
+    );
+    assert.equal(
+      process.env[overrideMarker],
+      "parent-override",
+      "validation environment overrides must not mutate process.env",
+    );
+  } finally {
+    if (previousInheritedMarker === undefined) {
+      delete process.env[inheritedMarker];
+    } else {
+      process.env[inheritedMarker] = previousInheritedMarker;
+    }
+
+    if (previousOverrideMarker === undefined) {
+      delete process.env[overrideMarker];
+    } else {
+      process.env[overrideMarker] = previousOverrideMarker;
+    }
+  }
 
   const shellFailure = await executeBenchmarkValidation(
     {

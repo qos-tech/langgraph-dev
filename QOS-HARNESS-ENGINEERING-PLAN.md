@@ -4,7 +4,7 @@
 **Version:** 2.0
 **Current milestone:** `H0`
 **Current task:** `H0-003 — Benchmark Runner`
-**Task status:** ✅ H0-004 Step 1 accepted
+**Task status:** 🚧 H0-004 Step 2B implementation in progress
 
 ---
 
@@ -10171,6 +10171,1265 @@ deterministic injected runners.
 H0-004 Step 2 — Benchmark Suite Runner
 ```
 
+## H0-004 Step 2 — Benchmark Suite Runner
+
+**Status:** ✅ Accepted
+
+### Objective
+
+Execute the fixed H0-002 benchmark suite through the accepted H0-003 complete
+runner and persist one task-level comparison record per execution.
+
+Step 2 must first prove suite sequencing, persistence, failure isolation, and
+first-run semantics with deterministic injected dependencies before any
+provider-backed B01-B05 execution.
+
+### Fixed suite boundary
+
+The suite is the existing immutable H0-002 benchmark set:
+
+```text
+B01
+B02
+B03
+B04
+B05
+```
+
+Step 2 must consume the existing exported benchmark suite.
+
+It must not redefine, reorder for convenience, or mutate benchmark cases merely
+to improve scores.
+
+### Runner composition
+
+For each selected `BenchmarkTask`:
+
+```text
+BenchmarkTask
+  ↓
+runCompleteBenchmark(...)
+  ↓
+CompleteBenchmarkRunnerResult
+  ↓
+createBenchmarkComparisonRecord(...)
+  ↓
+persist comparison record
+```
+
+The suite runner owns iteration and persistence only.
+
+It must not duplicate:
+
+```text
+workspace resolution
+Harness execution
+validation
+changed-file collection
+observation derivation
+acceptance evaluation
+comparison-record mapping
+```
+
+### First-run semantics
+
+H0-004 measures first completion.
+
+Therefore the suite runner must not automatically retry a benchmark task after:
+
+```text
+Harness failure
+validation failure
+acceptance failure
+blocked outcome
+comparison failure
+```
+
+One selected benchmark execution corresponds to one suite attempt.
+
+Infrastructure retry policy is explicitly outside Step 2.
+
+### Failure isolation
+
+A single benchmark infrastructure failure must not erase already-completed
+comparison records.
+
+Preferred behavior:
+
+```text
+B01 completes
+  → record persisted
+
+B02 infrastructure failure
+  → failure record/evidence persisted or surfaced
+
+B03...
+```
+
+The exact continuation policy must be explicit.
+
+Preferred initial policy:
+
+```text
+continue to remaining benchmark tasks after one task-level infrastructure
+failure
+```
+
+Rationale:
+
+```text
+the comparison milestone needs evidence across the full fixed suite
+one broken benchmark must not hide results from the others
+```
+
+The suite result must preserve which tasks could not produce a normal
+`BenchmarkComparisonRecord`.
+
+### Suite result contract
+
+Preferred conceptual shape:
+
+```ts
+type BenchmarkSuiteTaskResult =
+  | Readonly<{
+      benchmarkId: string;
+      status: "completed";
+      comparison: BenchmarkComparisonRecord;
+    }>
+  | Readonly<{
+      benchmarkId: string;
+      status: "infrastructure_failed";
+      error: BenchmarkSuiteTaskError;
+    }>;
+
+type BenchmarkSuiteRunResult = Readonly<{
+  tasks: readonly BenchmarkSuiteTaskResult[];
+}>;
+```
+
+Error shape should be deterministic and serializable.
+
+Do not persist raw `Error` objects as the report contract.
+
+Preferred task error evidence:
+
+```text
+name
+message
+```
+
+Stack traces may remain local diagnostic data but should not be required for
+comparison reporting.
+
+### Persistence boundary
+
+Step 2 needs a narrow persistence contract.
+
+Preferred concept:
+
+```ts
+interface BenchmarkComparisonStore {
+  saveTaskResult(result: BenchmarkSuiteTaskResult): Promise<void>;
+}
+```
+
+The suite runner should depend on this interface rather than hard-code JSON
+filesystem behavior into iteration logic.
+
+A deterministic in-memory store must be sufficient for focused tests.
+
+A concrete JSON/file store may be introduced in Step 2 only if it stays narrow
+and is required to perform real suite execution later in the same milestone.
+
+### Persistence semantics
+
+Persistence must happen task-by-task, immediately after each task result is
+known.
+
+Do not wait until all B01-B05 finish before writing any evidence.
+
+This guarantees partial evidence survives later failures.
+
+### Ordering
+
+Execute benchmarks in the fixed suite order.
+
+No concurrency in Step 2.
+
+Reasons:
+
+```text
+simpler first-run evidence
+predictable provider load
+deterministic persistence order
+easier task-by-task debugging
+```
+
+### Dependency injection
+
+Focused deterministic tests must not call a real provider.
+
+Inject a narrow complete-runner function:
+
+```text
+BenchmarkTask → CompleteBenchmarkRunnerResult
+```
+
+or equivalent dependency seam.
+
+Use the real:
+
+```text
+createBenchmarkComparisonRecord(...)
+```
+
+where practical to prove comparison compatibility.
+
+### Required deterministic tests
+
+Preferred test:
+
+```text
+src/test-h0-004-benchmark-suite-runner.ts
+```
+
+The test must prove:
+
+```text
+fixed suite order is preserved
+each benchmark is executed exactly once
+no automatic retry occurs
+comparison record is created once per successful task
+result is persisted immediately after each task
+infrastructure failure is captured deterministically
+suite continues after one infrastructure failure
+already-completed task evidence remains preserved
+all B01-B05 produce one suite task result
+benchmark definitions are not mutated
+provider/graph/Git real execution does not occur in focused tests
+```
+
+Also prove that an acceptance failure is still:
+
+```text
+status = completed
+comparison.accepted = false
+```
+
+not an infrastructure failure.
+
+### Real-suite readiness
+
+Step 2 is not accepted merely because injected iteration works.
+
+Before Step 2 closes, we must also establish how real B01-B05 repository IDs
+map to local source repositories/workspace roots.
+
+Do not add absolute paths to benchmark definitions.
+
+Use the accepted:
+
+```text
+BenchmarkRepositoryLocator
+```
+
+boundary.
+
+If the benchmark fixture repositories do not yet exist locally or revision tags
+cannot resolve, record that as a real-suite readiness blocker rather than
+changing benchmark identity.
+
+### Files
+
+Preferred create:
+
+```text
+src/benchmarks/suite-runner.ts
+src/test-h0-004-benchmark-suite-runner.ts
+```
+
+Potentially create a narrow persistence module:
+
+```text
+src/benchmarks/comparison-store.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify:
+
+```text
+src/benchmarks/cases.ts
+src/benchmarks/contracts.ts
+src/benchmarks/acceptance.ts
+src/benchmarks/complete-runner.ts
+src/benchmarks/comparison.ts
+src/telemetry/*
+src/app/run-harness.ts
+src/graph/*
+src/providers/*
+```
+
+unless deterministic source evidence exposes a concrete pre-existing contract
+defect.
+
+### Non-goals
+
+Do not yet:
+
+- generate the final Markdown/JSON comparison report;
+- aggregate SFCR/mean/median metrics;
+- define GO/PIVOT/STOP thresholds;
+- run benchmarks concurrently;
+- retry failed tasks;
+- change benchmark definitions;
+- change provider/model behavior;
+- add remote clone/download logic;
+- add UI.
+
+### Acceptance criteria
+
+- [ ] suite runner exists.
+- [ ] fixed B01-B05 suite order is preserved.
+- [ ] each benchmark executes at most once per suite run.
+- [ ] no automatic retry exists.
+- [ ] complete runner is injected/used through a narrow boundary.
+- [ ] successful task produces one comparison record.
+- [ ] acceptance failure remains a completed comparison result.
+- [ ] infrastructure failure is represented separately.
+- [ ] suite continues after one task infrastructure failure.
+- [ ] one task result exists for each selected benchmark.
+- [ ] task result is persisted immediately.
+- [ ] persistence order matches execution order.
+- [ ] partial completed evidence survives later failures.
+- [ ] benchmark definitions are not mutated.
+- [ ] focused tests use no provider/graph/Git real execution.
+- [ ] no new runtime dependency is added.
+- [ ] H0-004 Step 1 remains green.
+- [ ] H0-003 full gate remains green.
+- [ ] H0-002/H0-001 regressions remain green.
+- [ ] real-suite repository/revision readiness is characterized.
+
+### Targeted gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract && \
+npm run test:h0-003-complete-benchmark-runner && \
+npm run test:h0-003-benchmark-changed-files && \
+npm run test:h0-003-benchmark-observation && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-run-benchmark && \
+npm run test:h0-003-git-worktree-workspace && \
+npm run test:h0-003-workspace-contract && \
+npm run test:h0-003-benchmark-task-adapter && \
+npm run test:h0-003-runner-boundary-characterization && \
+npm run test:h0-002a-acceptance && \
+npm run test:h0-002-acceptance
+```
+
+Run exact existing H0-002/H0-001 regression scripts if package names differ.
+
+### Commit
+
+After acceptance:
+
+```bash
+git commit -m "feat(benchmark): run fixed comparison suite"
+```
+
+### Exit condition
+
+Step 2 is accepted when the fixed benchmark suite can be executed exactly once
+per task, task-level evidence is persisted incrementally, infrastructure
+failures remain isolated, and real B01-B05 repository/revision readiness is
+known.
+
+## H0-004 Step 2 Implementation Record
+
+**Status:** 🚧 Implemented; awaiting development-environment gate
+
+Implemented the suite-level sequencing boundary:
+
+```text
+src/benchmarks/suite-runner.ts
+```
+
+The runner consumes the existing fixed `benchmarkCases` export by default and
+owns only:
+
+```text
+ordered iteration
+one execution per benchmark
+comparison-record creation
+task-level infrastructure-error normalization
+incremental persistence
+continuation after task execution/comparison infrastructure failure
+```
+
+Execution flow:
+
+```text
+BenchmarkTask
+  ↓
+CompleteBenchmarkExecutor
+  ↓
+CompleteBenchmarkRunnerResult
+  ↓
+createBenchmarkComparisonRecord(...)
+  ↓
+BenchmarkSuiteTaskResult
+  ↓
+BenchmarkComparisonStore.saveTaskResult(...)
+  ↓
+next benchmark
+```
+
+Accepted distinction in the implementation:
+
+```text
+CompleteBenchmarkRunnerResult with acceptance.accepted = false
+  → status = completed
+
+throw during benchmark execution/comparison derivation
+  → status = infrastructure_failed
+```
+
+No task is automatically retried.
+
+Infrastructure errors are normalized to serializable:
+
+```text
+name
+message
+```
+
+rather than storing raw `Error` objects.
+
+Persistence is awaited immediately after every task result. A persistence-store
+failure aborts the suite, because continuing after evidence cannot be retained
+would violate incremental-evidence guarantees.
+
+The deterministic focused test uses the literal B01-B05 suite, verifies exact
+order and exactly-once execution, forces B04 infrastructure failure, verifies
+B05 still executes, and verifies B03 acceptance failure remains a completed
+comparison result.
+
+No real provider, graph, workspace, Git, or validation execution occurs.
+
+## H0-004 Step 2 Real-Suite Readiness Record
+
+The fixed suite requires these machine-independent repository/revision pairs:
+
+```text
+B01  fixture-simple-api / b01-v1
+B02  fixture-health-already-present / b02-v1
+B03  fixture-component-app / b03-v1
+B04  qflow-workflow-canvas / b04-v1
+B05  qos-harness-architecture / b05-v1
+```
+
+Current source evidence confirms the IDs/revisions but does not provide
+machine-local `BenchmarkRepositoryLocator` mappings or prove that all five
+revisions currently resolve in local Git repositories.
+
+Therefore real provider-backed suite execution is **not yet claimed ready**.
+
+Before Step 2 acceptance, development-environment readiness must explicitly
+verify:
+
+```text
+repository ID → local repository path
+requested revision → resolvable Git commit
+```
+
+through the accepted locator/workspace boundary, without placing absolute paths
+inside benchmark definitions.
+
+## H0-004 Step 2A — Benchmark Fixture Materialization
+
+**Status:** ✅ Accepted
+
+### Trigger
+
+Development-environment readiness check for the fixed benchmark revisions returned:
+
+```text
+b01-v1 → NOT FOUND
+b02-v1 → NOT FOUND
+b03-v1 → NOT FOUND
+b04-v1 → NOT FOUND
+b05-v1 → NOT FOUND
+```
+
+Therefore H0-004 Step 2 cannot yet be accepted as real-suite ready.
+
+The benchmark definitions are valid machine-independent identities, but the
+required repository/revision fixtures have not yet been materialized in the
+local development environment.
+
+### Objective
+
+Create deterministic local Git repositories for B01-B03 and deterministic local
+Git fixture repositories for B04-B05 so every fixed benchmark repository ID and
+revision can resolve through the accepted `BenchmarkRepositoryLocator` boundary.
+
+This substep is fixture/infrastructure preparation only.
+
+It must not change benchmark task semantics or make the benchmark easier.
+
+### Required mappings
+
+```text
+fixture-simple-api             → b01-v1
+fixture-health-already-present → b02-v1
+fixture-component-app          → b03-v1
+qflow-workflow-canvas          → b04-v1
+qos-harness-architecture       → b05-v1
+```
+
+### Important rule
+
+Do not create the required tags on arbitrary current production repositories.
+
+Each benchmark revision must represent the exact baseline state intended by the
+benchmark definition.
+
+For B04/B05, if a historical source baseline is required, create a dedicated
+fixture repository/snapshot rather than tagging today's mutable development
+repository as `b04-v1` or `b05-v1`.
+
+### Source-of-truth inspection
+
+Before materialization, inspect the exact existing B01-B05 definitions and any
+H0-002 fixture descriptions/tests to determine the minimum repository contents
+required by each task.
+
+Do not infer fixture contents from benchmark titles alone.
+
+### Preferred layout
+
+Use a repository-local or explicitly configured benchmark fixture root, for
+example:
+
+```text
+<project>/benchmark-fixtures/
+  fixture-simple-api/
+  fixture-health-already-present/
+  fixture-component-app/
+  qflow-workflow-canvas/
+  qos-harness-architecture/
+```
+
+The fixture root itself must not leak into benchmark identity.
+
+`BenchmarkRepositoryLocator` maps stable repository IDs to these machine-local
+paths.
+
+### Fixture requirements
+
+Each fixture repository must:
+
+```text
+be a valid Git repository
+contain a deterministic baseline commit
+resolve the required revision tag exactly
+have no uncommitted changes after creation
+be independent from the benchmark execution worktree
+be reproducible from repository-controlled fixture source/scripts
+```
+
+### Reproducibility
+
+Do not rely on one-off manual shell history.
+
+Preferred implementation:
+
+```text
+scripts/materialize-benchmark-fixtures.ts
+```
+
+or equivalent deterministic repository-controlled script.
+
+Running the materializer twice should be safe and should not silently rewrite an
+existing mismatched fixture.
+
+If an existing fixture has the expected revision and baseline, it may be reused.
+
+If it exists but differs from the expected baseline, fail loudly.
+
+### Locator
+
+Provide a narrow local locator implementation/configuration that maps:
+
+```text
+repositoryId → fixture repository path
+```
+
+without adding absolute paths to `src/benchmarks/cases.ts`.
+
+The exact mechanism may be:
+
+```text
+environment/config supplied root + repositoryId
+```
+
+or another deterministic boundary consistent with the accepted
+`BenchmarkRepositoryLocator`.
+
+### Deterministic validation
+
+Add a focused test/readiness command proving:
+
+```text
+all five repository IDs resolve
+all five paths are Git repositories
+all five required revisions resolve to commits
+fixture worktrees are clean
+materialization is idempotent
+benchmark definitions remain unchanged
+```
+
+No LLM/provider call is permitted.
+
+### Non-goals
+
+Do not:
+
+- execute B01-B05 through the Harness yet;
+- alter benchmark success criteria;
+- alter expected outcomes;
+- retag arbitrary live project HEADs;
+- add remote clone/download behavior;
+- change provider/model routing;
+- generate H0-004 aggregates or reports.
+
+### Acceptance criteria
+
+- [ ] deterministic fixture materializer exists.
+- [ ] B01 fixture repository exists and resolves `b01-v1`.
+- [ ] B02 fixture repository exists and resolves `b02-v1`.
+- [ ] B03 fixture repository exists and resolves `b03-v1`.
+- [ ] B04 fixture repository exists and resolves `b04-v1`.
+- [ ] B05 fixture repository exists and resolves `b05-v1`.
+- [ ] all fixture repositories are clean after materialization.
+- [ ] materialization is idempotent.
+- [ ] existing mismatched fixture fails loudly rather than being overwritten.
+- [ ] locator resolves each stable repository ID without absolute paths in benchmark definitions.
+- [ ] benchmark definitions are unchanged.
+- [ ] no provider execution occurs.
+- [ ] H0-004 Step 2 deterministic suite-runner gate remains green.
+- [ ] H0-003/H0-002 regressions remain green.
+
+## H0-004 Step 2A Source-Evidence Record
+
+**Status:** ⛔ Blocked on fixture source baselines
+
+The supplied H0-002 sources establish the exact benchmark identities, requested
+behavior, constraints, validation commands, and expected outcomes for B01-B05.
+
+They do **not** contain repository fixture blueprints, source snapshots, commit
+SHAs, or materialization scripts for any of the five benchmark baselines.
+
+Confirmed from source:
+
+```text
+B01
+repository: fixture-simple-api
+revision: b01-v1
+validation: npm run typecheck; npm test
+expected: changes_required
+
+B02
+repository: fixture-health-already-present
+revision: b02-v1
+validation: npm run typecheck; npm test
+expected: already_satisfied
+
+B03
+repository: fixture-component-app
+revision: b03-v1
+validation: npm run typecheck; npm test
+expected: changes_required
+
+B04
+repository: qflow-workflow-canvas
+revision: b04-v1
+validation: npm run typecheck; npm test; npm run build
+expected: changes_required
+
+B05
+repository: qos-harness-architecture
+revision: b05-v1
+validation:
+  npm run typecheck
+  npm run test:provider-architecture
+  npm run test:llm-execution
+  npm run test:llm-call-telemetry
+expected: blocked
+```
+
+The H0-002 acceptance and suite-validation tests intentionally validate task
+contracts and acceptance semantics only. They do not define repository contents.
+
+### Consequence
+
+Step 2A must not invent fixture contents from benchmark prose.
+
+In particular:
+
+```text
+B03
+  → source does not define the existing StatusBadge API/component tree.
+
+B04
+  → source does not define the intended historical Q-Flow Workflow Canvas
+    baseline or which commit represents the pre-feature state.
+
+B05
+  → source does not define the intended Harness architectural baseline or which
+    commit contains the exact provider/telemetry boundary expected by b05-v1.
+```
+
+Creating arbitrary minimal repositories for these tasks would make the benchmark
+score a synthetic reconstruction rather than the fixed H0-002 benchmark intent.
+
+Tagging the current Q-Flow or Harness HEAD as b04-v1/b05-v1 would also violate
+the Step 2A baseline rule.
+
+### Required source evidence before implementation
+
+For B01-B03, provide either:
+
+```text
+existing fixture directories/repositories from prior work
+or
+the original source files/snapshots used when the benchmark cases were authored
+```
+
+For B04-B05, provide:
+
+```text
+the relevant Q-Flow and Harness Git repositories
+plus enough Git history to identify the intended pre-benchmark baseline commit
+```
+
+The baseline may then be frozen into dedicated fixture repositories and tagged
+with the benchmark revision without mutating live development repositories.
+
+### No-code decision
+
+No fixture materializer is implemented in this record because the current
+source set is insufficient to produce faithful, reproducible baselines.
+
+This is a benchmark-integrity blocker, not an implementation failure.
+
+## H0-004 Step 2A Baseline Decision Record
+
+The additional historical inspection resolves the B04/B05 provenance blocker.
+
+### B04 — Q-Flow Workflow Canvas
+
+Freeze:
+
+```text
+source repository: qflow
+source commit: 986051f70be5ea06323d4dd508a5465b797a5396
+fixture revision: b04-v1
+```
+
+Evidence at this commit shows the Workflow Builder foundation, draft model,
+plugin-registry architecture, workflow graph/domain infrastructure, and canvas
+feature specifications are present.
+
+The inspected source also shows existing add-action/add-condition behavior, but
+no evidence of the benchmark's requested canvas-local edge affordances such as
+edge removal or insert-between behavior.
+
+This makes `986051f` a valid pre-feature baseline rather than a post-solution
+snapshot.
+
+### B05 — Harness Architecture
+
+Freeze:
+
+```text
+source repository: langgraph
+source commit: 4329623bb82bda660c245074739617e662ff3b68
+fixture revision: b05-v1
+```
+
+This commit contains provider-neutral provider/execution boundaries and H0-001
+telemetry contracts/recording.
+
+Provider implementations can throw before a normal structured result is
+returned, while token usage is attached to normal successful provider results.
+
+The inspected evidence does not establish an existing failed-provider-call
+telemetry contract with safe elapsed/usage semantics. Therefore the benchmark's
+expected `blocked` outcome remains coherent at this baseline.
+
+### B01-B03 canonical fixture policy
+
+No historical source snapshots exist for B01-B03.
+
+They are now explicitly materialized as canonical dependency-free fixtures
+controlled by the Harness repository:
+
+```text
+B01
+  minimal Node HTTP service
+  existing root behavior
+  no GET /health
+
+B02
+  minimal Node HTTP service
+  GET /health already returns 200 JSON
+
+B03
+  localized StatusBadge component
+  semantic role=status text
+  secondary description present
+  no compact option
+```
+
+These newly frozen canonical baselines are a repair of the H0-002 fixture
+completeness gap. Their provenance is explicit and they must not be silently
+rewritten later to improve benchmark results.
+
+## H0-004 Step 2A Implementation Record
+
+**Status:** ✅ Accepted
+
+Implemented:
+
+```text
+src/benchmarks/fixture-materializer.ts
+src/benchmarks/local-fixture-locator.ts
+scripts/materialize-benchmark-fixtures.ts
+src/test-h0-004-benchmark-fixture-materialization.ts
+```
+
+The materializer:
+
+```text
+creates deterministic Git repositories
+tags b01-v1 through b05-v1
+uses canonical source-controlled blueprints for B01-B03
+uses git archive snapshots for historical B04/B05 commits
+records fixture metadata outside each repository
+verifies recorded commit/tree/cleanliness on reuse
+is idempotent
+fails loudly when an existing fixture is dirty or mismatched
+```
+
+The locator maps stable benchmark repository IDs beneath a supplied local
+fixture root without embedding machine-specific absolute paths in benchmark
+definitions.
+
+B01-B03 are dependency-free and their own `npm run typecheck` / `npm test`
+commands are exercised by the focused test.
+
+B04/B05 dependency installation/worktree dependency availability is deliberately
+not fabricated in this substep; after materialization, real-suite readiness must
+verify how their validation commands resolve dependencies inside isolated
+worktrees before provider-backed execution.
+
+### Exit condition
+
+Step 2A fixture materialization itself is ready when the same readiness diagnostic
+that previously returned five `NOT FOUND` results can resolve all five required
+benchmark revisions.
+
+Real-suite readiness is not yet satisfied because B04 revealed an execution-
+environment isolation defect after fixture materialization:
+
+```text
+Git worktree isolation        ✅
+dependency installation       ✅
+B04 typecheck                 ✅
+B04 build                     ✅
+B04 npm test                  ❌ contaminated persistent qflow_test database
+B05 isolated validation       ✅
+```
+
+The B04 source snapshot remains valid. The failure is caused by the historical
+Vitest global setup reusing a persistent `qflow_test` database across revisions.
+
+Therefore Step 2A must not rewrite `b04-v1`, alter B04 validation commands, or
+patch Q-Flow production/test behavior merely to make the benchmark green.
+
+Before H0-004 Step 2 can be accepted, complete Step 2B below.
+
+## H0-004 Step 2B — Benchmark Validation Environment Isolation
+
+**Status:** ✅ Accepted
+
+### Trigger
+
+Real B04 readiness proved that filesystem/worktree isolation is insufficient for
+a reproducible benchmark when validation depends on mutable external state.
+
+The historical B04 Vitest configuration injects:
+
+```text
+DATABASE_URL = TEST_DATABASE_URL
+  or postgresql://qflow:qflow@localhost:5432/qflow_test
+```
+
+and its global setup creates `qflow_test` only when absent. It does not recreate
+or clean the database for the historical revision.
+
+A database populated by a later Q-Flow revision therefore leaks later lookup
+rows into the historical B04 validation run.
+
+Observed contamination:
+
+```text
+plugin_categories
+  expected historical seed: financial_erp, messaging, workflow_utility
+  leaked row: custom
+
+plugin_operation_types
+  expected historical seed: trigger, action, query
+  leaked rows: condition, transform
+```
+
+Direct inspection outside Vitest showed the historical source and
+`prepareTestDatabase()` remain consistent at the expected 3/3 rows. The failure
+appears only when the historical Vitest run is pointed at the persistent
+`qflow_test` database.
+
+### Decision
+
+Introduce an explicit benchmark execution-environment boundary.
+
+Repository/worktree resolution and external execution environment are separate
+responsibilities:
+
+```text
+BenchmarkTask
+    ↓
+BenchmarkWorkspaceResolver
+    ↓
+ResolvedBenchmarkWorkspace
+    ↓
+BenchmarkEnvironmentPreparer
+    ↓
+PreparedBenchmarkEnvironment
+    ↓
+runHarness + validation with the same environment
+    ↓
+environment cleanup
+    ↓
+worktree cleanup
+```
+
+The boundary must remain benchmark/runtime infrastructure. It must not be added
+to benchmark task identity and must not require benchmark-specific branches in
+the Harness graph or provider layer.
+
+### Minimal contract direction
+
+The implementation should converge on a narrow injectable contract equivalent
+to:
+
+```ts
+export type PreparedBenchmarkEnvironment = Readonly<{
+  env: Readonly<Record<string, string>>;
+  cleanup: () => Promise<void>;
+}>;
+
+export interface BenchmarkEnvironmentPreparer {
+  prepare(request: Readonly<{
+    benchmark: BenchmarkTask;
+    workspace: ResolvedWorkspace;
+  }>): Promise<PreparedBenchmarkEnvironment>;
+}
+```
+
+Exact naming may change during implementation if current source boundaries prove
+a smaller mechanically compatible shape.
+
+The important contract properties are:
+
+```text
+prepare receives benchmark identity + resolved workspace
+prepare returns environment overrides + cleanup
+environment is execution-scoped
+environment is not persisted into BenchmarkTask
+environment is provider-neutral
+```
+
+### No-op behavior
+
+Benchmarks without external-state requirements must require no special setup.
+
+For the current fixed suite:
+
+```text
+B01 → no-op environment
+B02 → no-op environment
+B03 → no-op environment
+B04 → isolated PostgreSQL environment
+B05 → no-op environment
+```
+
+The no-op preparer returns an empty environment and an idempotent cleanup.
+
+### B04 PostgreSQL isolation
+
+B04 must receive a unique disposable database per benchmark execution.
+
+Required behavior:
+
+```text
+1. derive a collision-resistant execution database name;
+2. create an empty database before Harness/validation execution;
+3. expose its connection string through DATABASE_URL;
+4. if compatibility requires it, expose the same URL through TEST_DATABASE_URL;
+5. run the Harness and all B04 validation commands with the same environment;
+6. drop the disposable database during cleanup.
+```
+
+Do not mutate or drop the developer's shared `qflow_test` database.
+
+Do not change the historical Q-Flow fixture to compensate for environmental
+contamination.
+
+Do not weaken:
+
+```text
+npm run typecheck
+npm test
+npm run build
+```
+
+### Environment propagation
+
+The same prepared environment must be visible to:
+
+```text
+Harness execution
+validation command execution
+```
+
+This prevents the Harness from inspecting/executing against one environment
+while deterministic validation runs against another.
+
+Environment overrides must be additive over the process environment rather than
+silently deleting unrelated required variables.
+
+Secrets or environment values must not be copied into benchmark comparison
+records or telemetry unless an existing explicit redaction-safe contract already
+requires them.
+
+### Failure semantics
+
+Preparation failure is infrastructure failure.
+
+```text
+environment prepare fails
+  → benchmark task status = infrastructure_failed
+  → Harness does not execute
+  → validation does not execute
+```
+
+Cleanup is mandatory after successful preparation, regardless of:
+
+```text
+Harness success
+Harness failure
+validation success
+validation failure
+comparison construction failure
+persistence/result handling failure where cleanup is still reachable
+```
+
+If a primary failure already exists, cleanup failure must not replace/mask that
+primary failure.
+
+If execution otherwise succeeds but environment cleanup fails, the failure must
+remain observable as infrastructure failure/evidence rather than being silently
+ignored.
+
+The implementation must preserve the already accepted worktree cleanup
+semantics and define deterministic ordering between environment cleanup and
+worktree cleanup.
+
+Preferred ordering:
+
+```text
+environment cleanup
+then
+worktree cleanup
+```
+
+because the environment may still require files/configuration from the resolved
+workspace during teardown.
+
+### Dependency preparation is not part of this decision
+
+Step 2B does not generalize dependency installation.
+
+The real readiness exercise already proved that B04/B05 can install dependencies
+with `npm ci` in isolated worktrees.
+
+If automated dependency preparation is later required by the suite runner, it
+must be specified separately rather than hidden inside the environment contract.
+
+### Unit-test strategy
+
+Production contract/orchestration tests must not require a real PostgreSQL
+server.
+
+Use deterministic fakes to prove:
+
+```text
+no-op preparation
+environment propagation to Harness
+environment propagation to validation
+prepare-before-execute ordering
+cleanup-after-execute ordering
+cleanup on Harness failure
+cleanup on validation failure
+prepare failure prevents execution
+primary failure survives cleanup failure
+successful execution + cleanup failure remains observable
+B01/B02/B03/B05 need no benchmark-specific infrastructure
+```
+
+Real PostgreSQL is reserved for the development-environment readiness gate.
+
+### Real readiness gate
+
+After deterministic tests pass, prove B04 against an actual disposable database.
+
+The readiness run must demonstrate:
+
+```text
+fresh database created
+historical B04 migrations/seed own the database state
+npm run typecheck passes
+npm test passes without custom/condition/transform contamination
+npm run build passes
+database is removed after the run
+shared qflow_test remains untouched
+```
+
+B05 isolated validation must remain green.
+
+### Files expected during implementation
+
+Expected production scope:
+
+```text
+src/benchmarks/environment.ts                 (or equivalent narrow contract)
+src/benchmarks/complete-runner.ts             (or current orchestration owner)
+src/benchmarks/validation.ts                  (only if env is not already injectable)
+```
+
+Expected test scope:
+
+```text
+src/test-h0-004-benchmark-environment.ts
+```
+
+Potential local PostgreSQL implementation may live under:
+
+```text
+src/benchmarks/postgres-environment.ts
+```
+
+only if source inspection proves this is the narrowest ownership boundary.
+
+Do not add PostgreSQL-specific branches to:
+
+```text
+src/app/run-harness.ts
+src/graph/*
+src/providers/*
+src/telemetry/*
+src/benchmarks/cases.ts
+```
+
+### Non-goals
+
+Do not in Step 2B:
+
+- alter `b04-v1`;
+- alter B04 task wording, constraints, success criteria, expected outcome, or
+  validation commands;
+- patch Q-Flow's historical Vitest setup;
+- delete/recreate the shared developer `qflow_test` database;
+- introduce Docker orchestration unless source evidence proves it necessary;
+- add provider/model routing behavior;
+- aggregate H0-004 suite metrics;
+- generate the comparison report;
+- start H1/H2;
+- solve general-purpose environment orchestration beyond evidence required by
+  the fixed benchmark suite.
+
+### Acceptance criteria
+
+- [ ] an explicit injectable benchmark environment-preparation boundary exists.
+- [ ] no-op preparation preserves B01/B02/B03/B05 behavior.
+- [ ] B04 receives a unique disposable PostgreSQL database per execution.
+- [ ] prepared environment is propagated to both Harness execution and validation.
+- [ ] benchmark task identity remains machine-independent and environment-free.
+- [ ] preparation failure prevents Harness/validation and is surfaced as infrastructure failure.
+- [ ] environment cleanup runs after every successful preparation.
+- [ ] cleanup ordering with worktree cleanup is deterministic.
+- [ ] cleanup failure does not mask a pre-existing primary failure.
+- [ ] successful execution followed by cleanup failure remains observable.
+- [ ] deterministic tests require no real PostgreSQL server.
+- [ ] B04 real readiness passes `typecheck`, `test`, and `build` against a fresh disposable database.
+- [ ] the shared `qflow_test` database is not mutated/dropped by benchmark isolation.
+- [ ] B05 isolated validation remains green.
+- [ ] benchmark definitions and `b04-v1` remain unchanged.
+- [ ] H0-004 Step 1/Step 2 deterministic gates remain green.
+- [ ] H0-003/H0-002 regressions remain green.
+
+### Step 2A integrity follow-up
+
+Before final Step 2/2A/2B acceptance, independently tighten fixture reuse so
+historical metadata verifies the requested `sourceRevision` in addition to the
+stored fixture revision/commit/tree/cleanliness.
+
+This is an integrity correction to Step 2A and must not be mixed with the
+external-environment behavior introduced by Step 2B.
+
+### Step 2B exit condition
+
+Step 2B is accepted only after:
+
+```text
+spec/decision
+→ implementation
+→ deterministic tests
+→ real B04 disposable-database readiness
+→ PLAN acceptance metadata
+→ full regression gate
+```
+
+After Step 2B and the Step 2A sourceRevision integrity follow-up are accepted,
+return to H0-004 Step 2 and close its real-suite readiness criterion.
+
+Only then proceed to:
+
+```text
+H0-004 Step 3 — Result Aggregation
+```
+
+Step 3 should compute suite-level SFCR, outcome correctness, validation success,
+intervention rate, latency, and usage aggregates from persisted task records.
+
 # Release Procedure — v0.1.0-alpha.7
 
 `H0-002A — Task Intake Foundation` is accepted.
@@ -17850,3 +19109,1075 @@ H0-003 slice based on desired checkpoint granularity.
 
 **Decision:** H0-002A accepted. Resume roadmap at H0-003 — Benchmark Runner.
 ```
+
+## H0-004 Step 2B — Slice 1 Implementation Record
+
+**Status:** ✅ Accepted
+
+### Scope implemented
+
+Slice 1 establishes the environment lifecycle without provisioning a real
+PostgreSQL database yet.
+
+Created:
+
+```text
+src/benchmarks/environment.ts
+src/test-h0-004-benchmark-environment.ts
+```
+
+Modified:
+
+```text
+src/app/run-harness.ts
+src/benchmarks/complete-runner.ts
+src/benchmarks/validation.ts
+src/test-h0-003-benchmark-validation.ts
+package.json
+```
+
+### Implemented ownership
+
+```text
+BenchmarkEnvironmentPreparer
+        ↓
+PreparedBenchmarkEnvironment { env, cleanup }
+        ↓
+runCompleteBenchmark(...)
+        ├─ runHarness(..., environment)
+        └─ executeBenchmarkValidation(..., environment)
+        ↓
+environment cleanup
+        ↓
+workspace cleanup
+```
+
+The default preparer is intentionally a no-op. No benchmark-specific PostgreSQL
+behavior exists in Slice 1.
+
+### Environment propagation rule
+
+`RunHarnessRequest` now carries optional execution-scoped `environment` data.
+This is runtime context, not task identity.
+
+The current Harness graph does not execute target-repository application
+commands, so Slice 1 does not mutate `process.env` or inject target environment
+values into provider composition.
+
+The complete benchmark runner nevertheless passes the exact prepared environment
+to the Harness execution boundary so any current/future execution adapter has an
+explicit scoped contract instead of relying on process-global mutation.
+
+Validation command execution receives the same environment and merges it over
+the inherited child-process environment:
+
+```text
+child env = process.env + prepared benchmark overrides
+```
+
+The parent `process.env` is not mutated.
+
+### Cleanup semantics
+
+After successful environment preparation:
+
+```text
+environment cleanup
+then
+workspace cleanup
+```
+
+Both cleanup attempts run even when environment cleanup fails.
+
+If execution already has a primary failure, cleanup failures do not replace it.
+
+If execution succeeds and environment cleanup fails, that cleanup failure remains
+observable after workspace cleanup is attempted.
+
+If environment cleanup succeeds and workspace cleanup fails, the workspace
+cleanup failure remains observable.
+
+If environment preparation fails, Harness/validation do not run and workspace
+cleanup still runs.
+
+### Deterministic tests
+
+New focused gate:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-environment && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-complete-benchmark-runner && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+The Step 2B test proves:
+
+- prepare occurs after workspace resolution and before Harness execution;
+- Harness and validation receive the same environment;
+- environment cleanup precedes workspace cleanup;
+- prepare failure prevents Harness/validation;
+- workspace cleanup still runs after prepare failure;
+- environment cleanup runs on Harness and validation failures;
+- primary execution failure survives environment cleanup failure;
+- workspace cleanup still runs after environment cleanup failure;
+- successful execution followed by cleanup failure remains observable;
+- the default preparer is a no-op.
+
+The H0-003 validation test additionally proves child commands inherit the parent
+environment, benchmark overrides win for the child, and `process.env` is not
+mutated.
+
+### Deferred to Slice 2
+
+Do not accept Step 2B yet.
+
+Slice 2 still owns:
+
+```text
+B04-specific disposable PostgreSQL preparer
+unique database naming
+database create/drop lifecycle
+DATABASE_URL / TEST_DATABASE_URL compatibility
+real B04 readiness
+shared qflow_test non-interference proof
+```
+
+No B04 fixture, benchmark definition, validation command, graph, provider or
+telemetry behavior changed in Slice 1.
+
+## H0-004 Step 2B — Slice 2 Disposable PostgreSQL Implementation Record
+
+**Status:** ✅ Accepted
+
+### Scope implemented
+
+Slice 2 adds the concrete external-state environment required by the current B04
+Q-Flow benchmark without changing `b04-v1`, its benchmark definition, or its
+validation commands.
+
+Created:
+
+```text
+src/benchmarks/postgres-environment.ts
+src/test-h0-004-benchmark-postgres-environment.ts
+```
+
+Modified:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+`src/benchmarks/complete-runner.ts` remains unchanged in this slice because
+Slice 1 already established the injectable `BenchmarkEnvironmentPreparer`
+boundary and propagates the prepared environment to both Harness execution and
+deterministic validation.
+
+### Concrete environment ownership
+
+`DisposablePostgresBenchmarkEnvironmentPreparer` is benchmark infrastructure.
+
+For the current fixed suite:
+
+```text
+qflow-workflow-canvas
+  → disposable PostgreSQL environment
+
+all other benchmark repositories
+  → no-op environment
+```
+
+The preparer does not change benchmark task identity and does not introduce
+PostgreSQL knowledge into graph/provider/telemetry code.
+
+### Administrative connection
+
+B04 requires an explicit administrative PostgreSQL connection:
+
+```text
+QOS_BENCHMARK_POSTGRES_ADMIN_URL
+```
+
+Example development value:
+
+```text
+postgresql://qflow:qflow@localhost:5432/postgres
+```
+
+The preparer does not infer administrative credentials from the benchmark task
+or persist them into comparison/telemetry records.
+
+The default infrastructure runner invokes the local `psql` client and supplies
+the administrative URL through the child-process `PGDATABASE` environment
+instead of placing the connection URL in the command argument list.
+
+No new npm runtime dependency is introduced.
+
+### Disposable database lifecycle
+
+Each B04 preparation creates a collision-resistant database name:
+
+```text
+qos_b04_<pid>_<random-suffix>
+```
+
+Generated names are validated against a strict PostgreSQL-identifier-safe
+vocabulary before any command runs.
+
+Preparation executes:
+
+```text
+CREATE DATABASE "<unique-name>" TEMPLATE template0;
+```
+
+and returns:
+
+```text
+DATABASE_URL      = postgres URL for <unique-name>
+TEST_DATABASE_URL = same postgres URL
+```
+
+Both values are execution-scoped and are consumed through the Slice 1
+environment propagation contract.
+
+Cleanup executes:
+
+```text
+DROP DATABASE IF EXISTS "<unique-name>" WITH (FORCE);
+```
+
+The developer/shared `qflow_test` database is never selected for create/drop by
+the Harness preparer.
+
+The historical Q-Flow Vitest global setup may still check whether `qflow_test`
+exists because that behavior belongs to the frozen B04 source. The benchmark
+infrastructure itself does not drop, truncate, seed, or otherwise rewrite the
+shared database.
+
+### Failure semantics
+
+If database creation fails:
+
+```text
+prepare rejects
+→ Harness does not run
+→ validation does not run
+→ workspace cleanup remains owned by complete-runner Slice 1 semantics
+```
+
+If database cleanup fails, the cleanup rejection remains visible to the
+complete runner, whose already-tested Slice 1 semantics preserve any earlier
+primary failure and still attempt workspace cleanup.
+
+### Deterministic tests
+
+New focused test:
+
+```bash
+npm run test:h0-004-benchmark-postgres-environment
+```
+
+It uses an injected fake PostgreSQL command runner and therefore requires:
+
+```text
+no real PostgreSQL server
+no psql execution
+no Docker
+no network
+```
+
+The test proves:
+
+- non-Q-Flow benchmark repositories remain no-op;
+- B04 requires an explicit administrative URL;
+- unique database URL derivation preserves connection parameters;
+- `DATABASE_URL` and `TEST_DATABASE_URL` point to the same disposable database;
+- source environment input is not mutated;
+- CREATE runs before the environment is returned;
+- cleanup issues DROP only for the generated disposable database;
+- unsafe generated database names are rejected before command execution;
+- create failure propagates;
+- cleanup failure propagates.
+
+### Slice 2 deterministic gate
+
+Run:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-postgres-environment && \
+npm run test:h0-004-benchmark-environment && \
+npm run test:h0-003-benchmark-validation && \
+npm run test:h0-003-complete-benchmark-runner && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+### Real B04 readiness still required
+
+Do not accept Step 2B from deterministic tests alone.
+
+After this gate passes, execute the historical B04 validation commands through
+the concrete disposable PostgreSQL preparer with:
+
+```text
+QOS_BENCHMARK_POSTGRES_ADMIN_URL
+```
+
+and prove:
+
+```text
+fresh disposable database created
+npm run typecheck passes
+npm test passes without leaked custom/condition/transform lookup rows
+npm run build passes
+disposable database removed afterward
+shared qflow_test remains unchanged
+```
+
+B05 isolated validation must remain green.
+
+### Non-goals retained
+
+Slice 2 does not:
+
+- alter `b04-v1`;
+- alter B04 validation commands;
+- patch historical Q-Flow Vitest setup;
+- drop/truncate/reseed the developer's `qflow_test`;
+- add Docker orchestration;
+- add an npm PostgreSQL client dependency;
+- change graph/provider/telemetry behavior;
+- aggregate comparison metrics;
+- generate H0-004 reports;
+- start H0-004 Step 3.
+
+### Step 2B acceptance state
+
+```text
+Slice 1 environment lifecycle       ✅ deterministic gate reported green
+Slice 2 disposable PostgreSQL       🧪 deterministic gate pending
+Real B04 readiness                  ⏳ pending
+Step 2A sourceRevision integrity    ⏳ pending
+H0-004 Step 2 final acceptance      ⏳ pending
+```
+
+## H0-004 Step 2C — B04 Fixture Hermeticity Repair Specification
+
+**Status:** ✅ Accepted
+
+### Problem
+
+Real B04 validation against a fresh disposable PostgreSQL database proved that
+the historical `b04-v1` snapshot is not test-hermetic.
+
+The environment isolation itself is working:
+
+```text
+shared qflow_test contamination removed
+disposable database created successfully
+typecheck passes
+build passes
+disposable database cleanup succeeds
+```
+
+However, the frozen B04 test suite depends on database state that is not
+established by the failing test itself.
+
+Observed behavior:
+
+```text
+full suite on fresh database
+  → 309 test files pass
+  → billing-pipeline.spec.ts reaches execution recording
+  → fails because workflow execution status "pending" is absent
+
+billing-pipeline.spec.ts in isolation on fresh database
+  → fails earlier because plugin definition "evolution_api" is absent
+```
+
+The historical source also shows:
+
+```text
+ensureLookupData(...)
+  → seeds workflowStatuses / workflowNodeTypes / nodeFailurePolicies
+  → does not seed workflowExecutionStatuses
+  → does not seed nodeExecutionStatuses
+
+syncPluginRegistry(...)
+  → is the established owner that materializes plugin definitions such as
+    evolution_api
+  → is called explicitly by many plugin-related tests
+  → is also called by the application migration/bootstrap path
+```
+
+Therefore the B04 failure is a fixture/test-bootstrap defect, not evidence that
+the disposable PostgreSQL environment is incorrect.
+
+### Decision
+
+Repair B04 hermeticity as a **benchmark fixture overlay** applied during fixture
+materialization.
+
+Do not teach Harness runtime/environment infrastructure about Q-Flow domain
+entities such as:
+
+```text
+evolution_api
+workflowExecutionStatuses
+nodeExecutionStatuses
+pending
+running
+completed
+failed
+cancelled
+succeeded
+```
+
+The repair must remain inside the materialized B04 fixture.
+
+### Repair boundary
+
+The overlay may modify only B04 test/bootstrap infrastructure required to make
+the frozen historical validation reproducible from an empty database.
+
+Preferred smallest repair:
+
+```text
+src/tests/e2e/billing-pipeline.spec.ts
+```
+
+The E2E test should explicitly establish its own prerequisites before executing
+the billing pipeline:
+
+```text
+prepareTestDatabase()
+  ↓
+syncPluginRegistry(db)
+  ↓
+insert workflow execution status lookup rows required by the recorder
+  ↓
+insert node execution status lookup rows required by the recorder
+  ↓
+execute scenario
+```
+
+The exact inserted status vocabulary must be copied from already-existing
+historical tests/contracts in `b04-v1`; it must not be invented by Harness.
+
+Current source evidence already establishes the historical vocabularies used by
+`execution-recorder.service.test.ts`:
+
+```text
+workflow:
+  pending
+  running
+  completed
+  failed
+  cancelled
+
+node:
+  pending
+  running
+  succeeded
+  failed
+  cancelled
+```
+
+The overlay must use idempotent inserts (`onConflictDoNothing`) so repeated
+setup remains deterministic.
+
+### Why the repair is localized to the E2E test
+
+Do not broaden `prepareTestDatabase()` merely to make one historical E2E pass.
+
+Reasons:
+
+- many tests intentionally call `syncPluginRegistry()` themselves;
+- changing the global helper would alter setup semantics for the entire frozen
+  test suite;
+- workflow/node execution statuses have no established central seed owner in
+  this snapshot;
+- a localized E2E prerequisite repair is smaller, rollback-friendly, and easier
+  to prove unrelated to the workflow-canvas behavior being benchmarked.
+
+### Fixture identity
+
+The historical source revision remains frozen:
+
+```text
+Q-Flow source:
+986051f70be5ea06323d4dd508a5465b797a5396
+```
+
+The benchmark-facing fixture revision remains:
+
+```text
+b04-v1
+```
+
+Materialization may create a deterministic fixture commit that consists of:
+
+```text
+historical source snapshot
++
+explicit benchmark-only hermeticity overlay
+```
+
+The external fixture metadata must continue recording the original historical
+`sourceRevision`.
+
+The overlay must be deterministic: same source revision + same overlay produces
+the same fixture tree/commit.
+
+### Feature-isolation rule
+
+The overlay is forbidden from changing any behavior measured by B04.
+
+It must not touch:
+
+```text
+workflow canvas UI
+node-add affordances
+edge actions
+insert-between behavior
+@xyflow/react integration
+workflow draft behavior
+plugin operation behavior
+production workflow execution behavior
+application production bootstrap
+benchmark task definition
+benchmark validation commands
+```
+
+Only test/bootstrap code needed for hermetic validation may change.
+
+### SourceRevision integrity dependency
+
+Step 2A still has a separate known integrity gap:
+
+```text
+existing materialized historical fixture reuse does not yet reject a changed
+requested sourceRevision
+```
+
+That correction remains required.
+
+It may be implemented in the same fixture-materializer development phase only
+as a separate, independently tested change/commit boundary. It must not be
+hidden inside the B04 hermeticity behavior patch.
+
+### Deterministic tests required for Step 2C implementation
+
+Harness-side tests must prove:
+
+- overlay is applied only to B04;
+- B01/B02/B03/B05 materialization remains unchanged;
+- B04 overlay touches only the approved test/bootstrap path;
+- generated fixture remains clean and tagged `b04-v1`;
+- metadata preserves the frozen historical source revision;
+- materialization is idempotent;
+- changing the overlay changes the resulting fixture tree deterministically;
+- feature implementation files are not modified by the overlay;
+- no provider, graph, benchmark definition, or validation-command behavior is
+  changed.
+
+No real PostgreSQL is required by the deterministic materializer test.
+
+### Real readiness gate
+
+After deterministic fixture-materializer tests pass, rematerialize B04 from the
+frozen source into a clean fixture root and validate against a fresh disposable
+database.
+
+Required result:
+
+```text
+npm ci                         PASS
+npm run typecheck              PASS
+npm test                       PASS
+npm run build                  PASS
+shared qflow_test untouched
+disposable benchmark DB removed after validation
+```
+
+The repaired `billing-pipeline.spec.ts` must also pass when run independently
+against a fresh disposable database.
+
+This isolated E2E pass is required specifically to prove removal of the
+test-order dependency.
+
+### Acceptance criteria
+
+Step 2C is accepted only when:
+
+- [ ] B04 historical source revision remains `986051f70...`.
+- [ ] benchmark revision remains `b04-v1`.
+- [ ] repair is an explicit deterministic materialization overlay.
+- [ ] overlay is B04-only.
+- [ ] overlay changes only approved test/bootstrap infrastructure.
+- [ ] `billing-pipeline.spec.ts` establishes plugin-registry prerequisites.
+- [ ] workflow execution status prerequisites are explicit and idempotent.
+- [ ] node execution status prerequisites are explicit and idempotent.
+- [ ] status vocabularies come from historical source evidence.
+- [ ] no B04 feature behavior is pre-implemented.
+- [ ] no production Q-Flow source behavior is changed by the overlay.
+- [ ] no Harness runtime/environment Q-Flow-domain knowledge is introduced.
+- [ ] materialization remains deterministic and idempotent.
+- [ ] B01/B02/B03/B05 fixtures remain unchanged.
+- [ ] isolated billing-pipeline test passes on a fresh disposable DB.
+- [ ] full B04 typecheck/test/build passes on a fresh disposable DB.
+- [ ] shared `qflow_test` remains untouched.
+- [ ] disposable DB cleanup succeeds.
+- [ ] Step 2B deterministic gates remain green.
+- [ ] Step 2A sourceRevision integrity gap is closed separately before final
+      H0-004 Step 2 acceptance.
+
+### Non-goals
+
+Step 2C does not:
+
+- change the B04 task request;
+- change B04 success criteria;
+- change B04 validation commands;
+- advance the fixture to a later Q-Flow feature commit;
+- change Harness planning/provider/model behavior;
+- introduce dependency installation into the runner;
+- change comparison aggregation/reporting;
+- start H0-004 Step 3.
+
+### Exit condition
+
+After Step 2C and the independent Step 2A sourceRevision integrity correction
+are accepted, rerun the complete H0-004 Step 2 gate.
+
+Only then may H0-004 Step 2 be finalized and committed before moving to
+H0-004 Step 3.
+
+## H0-004 Step 2C — Implementation Record
+
+**Status:** ✅ Accepted
+
+### Implemented slice
+
+The materializer now applies one deterministic B04-only hermeticity overlay to:
+
+```text
+src/tests/e2e/billing-pipeline.spec.ts
+```
+
+The overlay does not modify Harness runtime/environment code and does not alter
+B04 workflow-canvas implementation files.
+
+It makes the historical E2E test explicitly establish the prerequisites that
+were previously inherited accidentally from test-suite order:
+
+```text
+prepareTestDatabase()
+  → syncPluginRegistry(db)
+  → workflow execution status lookup rows
+  → node execution status lookup rows
+```
+
+The status vocabularies are copied from the historical
+`execution-recorder.service.test.ts` evidence:
+
+```text
+workflow: pending, running, completed, failed, cancelled
+node:     pending, running, succeeded, failed, cancelled
+```
+
+All inserts are idempotent through `onConflictDoNothing`.
+
+### Deterministic protection
+
+`test:h0-004-benchmark-fixture-materialization` now additionally proves:
+
+- B04 receives the overlay;
+- historical B04 source content and materialized B04 content differ explicitly;
+- B04 metadata preserves the historical source revision;
+- B05 remains unchanged;
+- plugin-registry synchronization is explicit;
+- workflow/node execution lookup prerequisites are explicit;
+- lookup setup is idempotent;
+- existing materialization idempotence remains intact.
+
+### Important separation retained
+
+This implementation does **not** close the separate Step 2A
+`sourceRevision`-reuse integrity gap. Existing fixture reuse validation still
+needs its own correction and test before final H0-004 Step 2 acceptance.
+
+### Targeted gate
+
+```bash
+npm run typecheck && npm run test:h0-004-benchmark-fixture-materialization && npm run test:h0-004-benchmark-postgres-environment && npm run test:h0-004-benchmark-environment
+```
+
+After the deterministic gate passes, rematerialize B04 into a fresh fixture
+root and rerun:
+
+```text
+isolated billing-pipeline.spec.ts on fresh disposable DB
+full npm test on fresh disposable DB
+npm run typecheck
+npm run build
+```
+
+Do not accept Step 2C until both isolated and full real readiness are green.
+
+### Step 2C real-materialization correction — resilient database-ready anchor
+
+The first real B04 rematerialization exposed a materializer-only defect:
+
+```text
+B04 hermeticity overlay setup anchor not found
+```
+
+The implementation had required one exact multi-line block containing both:
+
+```text
+await prepareTestDatabase();
+
+db = getDb();
+```
+
+The historical snapshot does not preserve that exact adjacency/whitespace shape,
+even though the semantic `db = getDb();` boundary exists.
+
+**Decision:** anchor the overlay after the unique database-ready statement:
+
+```text
+db = getDb();
+```
+
+instead of matching a brittle multi-line formatting block.
+
+The materializer now requires exactly one such anchor and fails loudly if zero
+or multiple matches are found.
+
+This correction does not change:
+
+- B04 source revision;
+- benchmark revision;
+- overlay contents;
+- status vocabularies;
+- fixture scope;
+- Harness runtime/environment behavior;
+- validation commands.
+
+The deterministic fixture test now deliberately places a harmless line between
+`prepareTestDatabase()` and `db = getDb()` so future changes cannot
+accidentally restore the brittle adjacency assumption.
+
+After this correction, rerun the Step 2C deterministic gate before attempting
+real rematerialization again.
+
+
+
+### Step 2C real-readiness correction — execution mode prerequisite
+
+The isolated B04 readiness run advanced past plugin-registry and execution
+status prerequisites, then failed because `workflow_executions.execution_mode_id`
+references an empty `execution_modes` lookup.
+
+Historical source evidence establishes the fixture-local prerequisite used by
+the existing execution tests:
+
+```text
+executionModes
+  name: production
+  slug: production
+```
+
+The billing executor hard-codes `executionModeId: 1` and
+`triggerMechanismId: 1`. The historical `ensureLookupData()` already populates
+`triggerMechanisms`, so no trigger-mechanism overlay is added.
+
+**Correction:** extend only the B04 hermeticity overlay with an idempotent
+`executionModes` insert for the historical `production` value.
+
+No production Q-Flow behavior, workflow-canvas feature code, Harness
+runtime/environment code, benchmark definition, or validation command changes.
+
+After this correction, rerun the focused deterministic gate, rematerialize B04
+from a clean fixture root, and rerun the isolated E2E readiness before the full
+B04 suite.
+
+### Step 2C acceptance record
+
+Step 2C is accepted based on the reported development-environment evidence:
+
+```text
+focused deterministic Step 2C gate      PASS
+fresh B04 fixture materialization       PASS
+isolated billing-pipeline.spec.ts       PASS
+B04 typecheck                           PASS
+B04 full test suite                     PASS
+B04 production build                    PASS
+disposable PostgreSQL cleanup           PASS
+```
+
+The real readiness sequence also exposed and corrected two fixture-hermeticity
+details without widening the repair beyond B04 test/bootstrap infrastructure:
+
+```text
+database-ready overlay anchor
+execution_modes.production prerequisite
+```
+
+No workflow-canvas feature behavior, production Q-Flow bootstrap behavior,
+Harness provider/runtime behavior, or benchmark validation command was changed
+by those corrections.
+
+Step 2C is closed. Do not change B04 hermeticity again unless a later
+deterministic gate produces new evidence.
+
+## H0-004 Step 2A — Historical sourceRevision reuse integrity correction
+
+**Status:** ✅ Accepted
+
+### Problem
+
+Historical fixture metadata already records:
+
+```text
+sourceRevision
+```
+
+when a fixture is first materialized, but the existing reuse path validated only:
+
+```text
+benchmark revision
+synthetic fixture commit
+fixture tree
+clean Git status
+```
+
+Therefore a caller could request a different historical source revision while
+an older materialized fixture already existed at the same fixture root, and the
+old fixture could be silently reused.
+
+That violates benchmark reproducibility.
+
+### Decision
+
+For every existing fixture reuse, derive:
+
+```text
+expectedSourceRevision =
+  blueprint.historicalSource?.revision ?? null
+```
+
+and require the stored metadata `sourceRevision` to match it exactly.
+
+This applies consistently to:
+
+```text
+historical fixtures → exact requested source revision required
+generated fixtures  → stored sourceRevision must remain null
+```
+
+A mismatch uses the existing fail-loudly baseline-integrity error. The
+materializer must never silently rebuild, mutate, or reuse a fixture whose
+recorded source provenance differs from the current request.
+
+### Deterministic regression
+
+The fixture-materialization test now:
+
+```text
+1. materializes the historical Q-Flow fixture;
+2. confirms metadata records the original source revision;
+3. creates a second commit in the source repository;
+4. requests materialization using that changed source revision and the same
+   fixture root;
+5. requires reuse to fail with the existing baseline-integrity error.
+```
+
+This test exercises the reuse path directly; it does not depend on real Q-Flow,
+real PostgreSQL, providers, or external services.
+
+### Scope
+
+Modify only:
+
+```text
+src/benchmarks/fixture-materializer.ts
+src/test-h0-004-benchmark-fixture-materialization.ts
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+### Non-goals
+
+This correction does not:
+
+- change historical source commits selected for B04/B05;
+- change benchmark revision tags;
+- change B04 hermeticity overlay behavior;
+- change workspace resolution;
+- change PostgreSQL environment isolation;
+- change suite execution/comparison behavior;
+- change provider/model/runtime behavior;
+- start H0-004 Step 3.
+
+### Focused deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-fixture-materialization
+```
+
+After this focused gate passes, finalize the H0-004 Step 2 acceptance record and
+run the complete Step 2 regression gate before the consolidation commit.
+
+## H0-004 Step 2 — Final Acceptance Record
+
+**Status:** ✅ Accepted
+
+H0-004 Step 2 is accepted based on the complete reported development-environment
+evidence collected across the suite-runner readiness work.
+
+Accepted deterministic and real-environment evidence:
+
+```text
+suite runner deterministic behavior             PASS
+comparison contract                             PASS
+H0-003 validation / complete runner regressions PASS
+fixture materialization                         PASS
+historical sourceRevision reuse integrity       PASS
+benchmark environment lifecycle                 PASS
+disposable PostgreSQL environment               PASS
+fresh B04 materialization                       PASS
+isolated B04 billing pipeline                   PASS
+B04 typecheck                                   PASS
+B04 full test suite                             PASS
+B04 production build                            PASS
+disposable PostgreSQL cleanup                   PASS
+complete H0-004 Step 2 regression gate          PASS
+```
+
+The final shell status for the complete Step 2 regression gate was:
+
+```text
+0
+```
+
+### Accepted Step 2 boundaries
+
+The fixed suite remains:
+
+```text
+B01 → B02 → B03 → B04 → B05
+```
+
+The suite runner owns only suite iteration, comparison-record persistence, and
+task-level infrastructure-failure isolation.
+
+It does not duplicate:
+
+```text
+workspace resolution
+Harness execution
+validation
+changed-file collection
+observation derivation
+acceptance evaluation
+comparison-record mapping
+```
+
+One selected benchmark task remains one suite attempt. No hidden task-level
+retry/re-run behavior is introduced.
+
+### Fixture provenance and hermeticity
+
+Accepted fixture behavior:
+
+```text
+B01-B03
+  → canonical Harness-controlled fixtures
+
+B04
+  → historical Q-Flow source
+     986051f70be5ea06323d4dd508a5465b797a5396
+  → benchmark revision b04-v1
+  → deterministic benchmark-only test-hermeticity overlay
+
+B05
+  → historical Harness source
+     4329623bb82bda660c245074739617e662ff3b68
+  → benchmark revision b05-v1
+```
+
+Existing historical fixture reuse now requires exact metadata
+`sourceRevision` equality with the requested historical revision.
+
+A source-revision mismatch fails loudly and cannot silently reuse an older
+fixture.
+
+### B04 environment conclusion
+
+The original B04 readiness failure was caused by persistent shared PostgreSQL
+state, not by the historical source revision itself.
+
+The accepted environment boundary now provides:
+
+```text
+fresh disposable PostgreSQL database per B04 run
+DATABASE_URL / TEST_DATABASE_URL scoped to execution
+no process.env mutation by the Harness environment boundary
+environment cleanup before workspace cleanup
+primary failure preservation across cleanup
+no mutation/drop of shared qflow_test
+```
+
+The B04 historical test suite also required a benchmark-only hermeticity repair
+for prerequisites that had previously depended on test ordering. That repair
+remains localized to fixture test/bootstrap infrastructure and does not alter
+the workflow-canvas behavior being measured.
+
+### Commit-boundary recovery note
+
+During Step 2 readiness investigation, Step 2A/2B/2C changes became interleaved
+before their intended individual commit boundaries.
+
+To avoid risky retroactive history reconstruction, the accepted recovery
+decision is:
+
+```text
+one consolidation commit for H0-004 Step 2
+```
+
+This is an explicit exception caused by the already-interleaved working tree,
+not a change to the engineering rule.
+
+After this consolidation commit, development returns to:
+
+```text
+spec/decision
+→ implementation
+→ tests
+→ plan
+→ full gate
+→ one self-contained commit
+```
+
+for subsequent work.
+
+### Exit condition
+
+H0-004 Step 2 is complete.
+
+After the consolidation commit, the next allowed implementation step is:
+
+```text
+H0-004 Step 3 — Result Aggregation
+```
+
+Do not automatically proceed to H1/H2. H0-004 remains the GO / PIVOT / STOP
+checkpoint and must be completed and reviewed first.
+

@@ -18,11 +18,13 @@ export type BenchmarkValidationResult = Readonly<{
 export type BenchmarkValidationRequest = Readonly<{
   repositoryPath: string;
   commands: readonly string[];
+  environment?: Readonly<Record<string, string>>;
 }>;
 
 export type BenchmarkValidationCommandRequest = Readonly<{
   command: string;
   cwd: string;
+  environment?: Readonly<Record<string, string>>;
 }>;
 
 export interface BenchmarkValidationCommandRunner {
@@ -60,6 +62,14 @@ export class NodeShellBenchmarkValidationCommandRunner
       const result = await execAsync(request.command, {
         cwd: request.cwd,
         encoding: "utf8",
+        ...(request.environment
+          ? {
+              env: {
+                ...process.env,
+                ...request.environment,
+              },
+            }
+          : {}),
       });
 
       return {
@@ -102,6 +112,11 @@ export async function executeBenchmarkValidation(
     const result = await commandRunner.run({
       command,
       cwd: request.repositoryPath,
+      ...(request.environment
+        ? {
+            environment: request.environment,
+          }
+        : {}),
     });
 
     commands.push(result);

@@ -6,6 +6,11 @@ import {
 import { collectBenchmarkChangedFiles } from "./changed-files.js";
 import type { BenchmarkTask } from "./contracts.js";
 import {
+  NoopBenchmarkEnvironmentPreparer,
+  type BenchmarkEnvironmentPreparer,
+  type PreparedBenchmarkEnvironment,
+} from "./environment.js";
+import {
   deriveBenchmarkRunObservation,
   type BenchmarkObservationEvidence,
 } from "./observation.js";
@@ -48,6 +53,7 @@ export type BenchmarkAcceptanceEvaluator = (
 
 export type CompleteBenchmarkRunnerDependencies = Readonly<{
   workspaceResolver: BenchmarkWorkspaceResolver;
+  environmentPreparer?: BenchmarkEnvironmentPreparer;
   runHarness?: BenchmarkHarnessExecutor;
   executeValidation?: BenchmarkValidationExecutor;
   collectChangedFiles?: BenchmarkChangedFilesCollector;
@@ -64,6 +70,8 @@ export async function runCompleteBenchmark(
     repository: benchmark.repository,
   });
 
+  const environmentPreparer =
+    dependencies.environmentPreparer ?? new NoopBenchmarkEnvironmentPreparer();
   const executeHarness = dependencies.runHarness ?? defaultRunHarness;
   const validate =
     dependencies.executeValidation ?? executeBenchmarkValidation;
@@ -75,16 +83,24 @@ export async function runCompleteBenchmark(
     dependencies.evaluateAcceptance ?? evaluateBenchmarkAcceptance;
 
   let primaryError: unknown;
+  let preparedEnvironment: PreparedBenchmarkEnvironment | undefined;
 
   try {
+    preparedEnvironment = await environmentPreparer.prepare({
+      benchmark,
+      workspace: resolvedWorkspace.workspace,
+    });
+
     const harness = await executeHarness({
       task,
       workspace: resolvedWorkspace.workspace,
+      environment: preparedEnvironment.env,
     });
 
     const validation = await validate({
       repositoryPath: resolvedWorkspace.workspace.repositoryPath,
       commands: benchmark.validationCommands,
+      environment: preparedEnvironment.env,
     });
 
     const filesChanged = await collectChangedFiles(
@@ -110,14 +126,28 @@ export async function runCompleteBenchmark(
     primaryError = error;
     throw error;
   } finally {
+    let cleanupFailure: unknown;
+
+    if (preparedEnvironment) {
+      try {
+        await preparedEnvironment.cleanup();
+      } catch (error) {
+        if (primaryError === undefined) {
+          cleanupFailure = error;
+        }
+      }
+    }
+
     try {
       await resolvedWorkspace.cleanup();
-    } catch (cleanupError) {
-      if (primaryError === undefined) {
-        throw cleanupError;
+    } catch (error) {
+      if (primaryError === undefined && cleanupFailure === undefined) {
+        cleanupFailure = error;
       }
+    }
 
-      // Preserve the primary runner failure when cleanup also fails.
+    if (primaryError === undefined && cleanupFailure !== undefined) {
+      throw cleanupFailure;
     }
   }
 }
