@@ -61,11 +61,13 @@
     "test:h0-004-comparison-contract": "tsx src/test-h0-004-comparison-contract.ts",
     "test:h0-004-benchmark-aggregation": "tsx src/test-h0-004-benchmark-aggregation.ts",
     "test:h0-004-comparison-report": "tsx src/test-h0-004-comparison-report.ts",
+    "test:h0-004-real-suite": "tsx src/test-h0-004-real-suite.ts",
     "test:h0-004-benchmark-suite-runner": "tsx src/test-h0-004-benchmark-suite-runner.ts",
     "test:h0-004-benchmark-fixture-materialization": "tsx src/test-h0-004-benchmark-fixture-materialization.ts",
     "test:h0-004-benchmark-environment": "tsx src/test-h0-004-benchmark-environment.ts",
     "test:h0-004-benchmark-postgres-environment": "tsx src/test-h0-004-benchmark-postgres-environment.ts",
-    "benchmark:materialize-fixtures": "tsx scripts/materialize-benchmark-fixtures.ts"
+    "benchmark:materialize-fixtures": "tsx scripts/materialize-benchmark-fixtures.ts",
+    "benchmark:h0-004-baseline": "node --env-file=.env --import tsx scripts/run-h0-004-baseline.ts"
   },
   "keywords": [],
   "author": "",

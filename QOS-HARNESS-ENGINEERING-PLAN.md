@@ -21369,7 +21369,7 @@ Only a green full gate may close the Step 4 implementation commit.
 
 ## H0-004 Step 5 — First Real Fixed-Suite Execution and Report Capture
 
-**Status:** 📋 Specification / decision
+**Status:** 🧪 Implemented — deterministic gate pending
 
 ### Objective
 
@@ -22075,4 +22075,151 @@ evidence commit
 The evidence commit must not alter the Harness implementation that was measured.
 
 It does not authorize H1/H2 implementation.
+
+### Step 5 implementation record
+
+Implemented the deterministic/live execution boundary:
+
+```text
+src/benchmarks/real-suite.ts
+src/test-h0-004-real-suite.ts
+scripts/run-h0-004-baseline.ts
+```
+
+and package commands:
+
+```text
+test:h0-004-real-suite
+benchmark:h0-004-baseline
+```
+
+The Step 5 service now composes existing accepted boundaries rather than
+duplicating their algorithms:
+
+```text
+fixture materializer
+→ local fixture locator
+→ Git worktree workspace resolver
+→ disposable B04 PostgreSQL environment
+→ complete benchmark runner
+→ fixed suite runner
+→ aggregation
+→ comparison report
+→ baseline capture persistence
+```
+
+The real baseline preflight requires:
+
+```text
+clean measured Harness working tree
+QOS_BENCHMARK_FIXTURE_ROOT
+QFLOW_REPOSITORY
+QOS_BENCHMARK_POSTGRES_ADMIN_URL
+NVIDIA_API_KEY
+psql availability
+canonical baseline artifacts absent
+fixture materialization/provenance integrity
+writable canonical artifact directory
+```
+
+`HARNESS_REPOSITORY` remains optional and defaults to the measured Harness
+repository for the historical B05 source snapshot.
+
+The measured source identity is:
+
+```text
+current Harness HEAD
+current package.json version
+```
+
+The current default runtime is projected at the outer Step 5 boundary as:
+
+```text
+planner  → nvidia + resolved planner model
+reviewer → nvidia + resolved reviewer model
+refiner  → nvidia + resolved refiner model
+```
+
+Provider identity is established from the concrete default composition/provider
+object at the outer measurement boundary. It is not inferred from model-name
+strings and is not added to graph/planning state.
+
+The canonical capture envelope records:
+
+```text
+capture schema version
+capturedAt
+Harness git revision/package version
+resolved runtime role provider/model identity
+B01-B05 fixture revision/commit/source revision evidence
+Step 4 BenchmarkComparisonReport
+```
+
+The capture service rejects a suite result that is not exactly:
+
+```text
+B01 → B02 → B03 → B04 → B05
+```
+
+and invokes the suite exactly once.
+
+A task-level `infrastructure_failed` result remains a valid measured task result
+and does not itself fail capture.
+
+Preflight failure prevents suite execution.
+
+The baseline command also refuses to run when either canonical artifact already
+exists, preventing an implicit overwrite/rerun of the first baseline.
+
+Persistence renders both artifacts before publication and removes a partially
+published counterpart if the second rename fails.
+
+Canonical paths remain:
+
+```text
+.benchmark-results/h0-004/baseline.json
+.benchmark-results/h0-004/baseline.md
+```
+
+The deterministic Step 5 test uses injected fake suite/preflight dependencies
+and consumes zero provider usage. It covers:
+
+```text
+preflight-before-suite ordering
+preflight failure blocks suite
+single suite execution
+fixed B01-B05 order
+task infrastructure failure capture
+capture identity
+JSON/Markdown persistence
+partial-publication rollback
+canonical JSON/Markdown equivalence
+```
+
+No live baseline has been executed by this implementation patch.
+
+Before the implementation commit, run:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-real-suite && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract && \
+npm run test:h0-004-benchmark-fixture-materialization && \
+npm run test:h0-004-benchmark-postgres-environment && \
+npm run test:h0-004-benchmark-environment
+```
+
+Then run the complete H0-004 regression gate.
+
+Do not execute:
+
+```text
+npm run benchmark:h0-004-baseline
+```
+
+until the deterministic/full gates are green, the implementation is committed,
+and the working tree is clean.
 
