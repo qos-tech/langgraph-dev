@@ -20889,3 +20889,335 @@ acceptance metadata is applied.
 
 Only a green full gate may close the Step 3 implementation commit.
 
+## H0-004 Step 4 — Comparison Report Contract and Deterministic Rendering
+
+**Status:** 📋 Specification / decision
+
+### Objective
+
+Create the smallest deterministic report boundary that turns:
+
+```text
+BenchmarkSuiteRunResult
+        +
+BenchmarkSuiteAggregation
+```
+
+into one auditable H0-004 comparison artifact suitable for later real-suite
+execution and the final GO / PIVOT / STOP review.
+
+Step 4 is reporting only. It must not execute benchmarks, change aggregation
+semantics, make the viability decision automatically, or introduce a dashboard.
+
+### Input boundary
+
+Step 4 consumes already-produced evidence only:
+
+```text
+BenchmarkSuiteRunResult
+BenchmarkSuiteAggregation
+```
+
+Preferred direction:
+
+```text
+BenchmarkSuiteRunResult
+        +
+BenchmarkSuiteAggregation
+        ↓
+createBenchmarkComparisonReport(...)
+        ↓
+BenchmarkComparisonReport
+        ↓
+deterministic JSON / Markdown rendering
+```
+
+The report must not recompute benchmark acceptance or suite aggregation.
+
+### Versioned report contract
+
+Create:
+
+```text
+src/benchmarks/report.ts
+```
+
+Preferred contract:
+
+```ts
+export const BENCHMARK_COMPARISON_REPORT_SCHEMA_VERSION = 1 as const;
+
+export type BenchmarkComparisonReport = Readonly<{
+  schemaVersion: typeof BENCHMARK_COMPARISON_REPORT_SCHEMA_VERSION;
+  suite: BenchmarkSuiteAggregation;
+  tasks: readonly BenchmarkSuiteTaskResult[];
+}>;
+```
+
+The exact names may change only if repository type evidence requires it.
+Semantics are frozen:
+
+```text
+explicit schema version
+suite aggregation preserved unchanged
+ordered task evidence preserved unchanged
+no timestamps generated
+no run IDs generated
+```
+
+### Evidence preservation
+
+Completed task results retain the complete existing
+`BenchmarkComparisonRecord`.
+
+Infrastructure-failed task results retain:
+
+```text
+benchmarkId
+status
+error.name
+error.message
+```
+
+Do not flatten away task-level evidence merely because Step 3 provides
+aggregates.
+
+### Pure report factory
+
+`createBenchmarkComparisonReport(...)` must be pure.
+
+It must not:
+
+```text
+execute benchmarks
+run validation
+call Harness/providers
+read environment/files
+write files
+use Date.now()
+generate IDs
+mutate inputs
+recalculate comparison records
+recalculate aggregation
+```
+
+### Deterministic JSON rendering
+
+Provide:
+
+```ts
+renderBenchmarkComparisonReportJson(report): string
+```
+
+Requirements:
+
+```text
+valid JSON
+stable indentation
+trailing newline
+task order preserved
+no environment-derived fields
+no generated timestamp/ID
+no hidden evidence filtering
+```
+
+JSON is the canonical machine-readable H0-004 report.
+
+### Deterministic Markdown rendering
+
+Provide:
+
+```ts
+renderBenchmarkComparisonReportMarkdown(report): string
+```
+
+Stable sections:
+
+```text
+title / schema version
+
+suite summary:
+  selected
+  completed
+  infrastructure failed
+  accepted
+  SFCR
+  outcome correctness
+  validation success
+  human intervention
+  total/average Harness duration
+  total/average LLM calls
+  token aggregates
+  cost
+
+task-by-task table:
+  benchmark
+  status
+  expected
+  observed
+  accepted
+  validation
+  intervention
+  duration
+  LLM calls
+  failure summary
+
+terminal failure reasons
+infrastructure failure reasons
+```
+
+### Formatting rules
+
+Rates:
+
+```text
+null → n/a
+non-null → percentage with exactly 2 decimal places
+```
+
+Examples:
+
+```text
+1    → 100.00%
+0.6  → 60.00%
+0    → 0.00%
+null → n/a
+```
+
+Unknown aggregate evidence:
+
+```text
+null → n/a
+```
+
+Known zero remains `0`.
+
+Do not transform unknown values into zero.
+
+### Infrastructure failure presentation
+
+`infrastructure_failed` must remain distinct from a completed but rejected
+benchmark.
+
+Do not label infrastructure failure as rejected, validation failure, or human
+intervention unless that evidence actually exists.
+
+### Persistence decision
+
+Step 4 does not persist reports automatically.
+
+Artifact location, naming, timestamps, and run identity must be decided with the
+later real-suite execution where lifecycle ownership actually exists.
+
+Therefore Step 4 defines only:
+
+```text
+report contract
+report factory
+JSON renderer
+Markdown renderer
+```
+
+and does not create:
+
+```text
+filesystem report store
+.reports directory
+timestamped filenames
+database
+dashboard
+```
+
+### Deterministic tests
+
+Create:
+
+```text
+src/test-h0-004-comparison-report.ts
+```
+
+It must prove:
+
+1. schema version is explicit;
+2. suite aggregation is retained unchanged;
+3. ordered task evidence is retained;
+4. factory does not mutate or recompute input evidence;
+5. JSON rendering is byte-deterministic and valid;
+6. JSON preserves completed and infrastructure-failed evidence;
+7. Markdown rates use exactly two decimal places;
+8. Markdown renders null as `n/a` and known zero as zero;
+9. completed rejection and infrastructure failure remain visually distinct;
+10. terminal and infrastructure failure summaries remain separate;
+11. empty-suite output is valid and deterministic.
+
+### Scope
+
+Create:
+
+```text
+src/benchmarks/report.ts
+src/test-h0-004-comparison-report.ts
+```
+
+Modify during implementation:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+This specification patch modifies only the Engineering Plan.
+
+### Non-goals
+
+Step 4 does not:
+
+- execute real B01-B05;
+- call providers;
+- persist reports;
+- create dashboard/UI/HTML/PDF;
+- generate report IDs or timestamps;
+- define filesystem naming;
+- change suite-runner behavior;
+- change aggregation semantics;
+- change benchmark acceptance or definitions;
+- infer missing cost;
+- compare model/provider strategies;
+- decide GO / PIVOT / STOP;
+- define viability thresholds;
+- begin H1/H2.
+
+### Focused implementation gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+### Development boundary
+
+```text
+spec/decision
+→ commit spec
+→ implementation
+→ focused deterministic gate
+→ PLAN acceptance metadata
+→ full H0-004 regression gate
+→ one self-contained implementation commit
+```
+
+### Exit condition
+
+Step 4 is complete when a versioned deterministic machine-readable and
+human-readable report can be created from Step 2/3 evidence without executing
+or recomputing benchmark behavior.
+
+After Step 4, the expected next H0-004 slice is the first real fixed-suite
+execution/report capture.
+
+The final GO / PIVOT / STOP decision remains deferred until real B01-B05
+comparison evidence exists and has been reviewed.
+
