@@ -21367,3 +21367,657 @@ acceptance metadata is applied.
 
 Only a green full gate may close the Step 4 implementation commit.
 
+## H0-004 Step 5 — First Real Fixed-Suite Execution and Report Capture
+
+**Status:** 📋 Specification / decision
+
+### Objective
+
+Execute the accepted fixed benchmark suite:
+
+```text
+B01 → B02 → B03 → B04 → B05
+```
+
+through the real H0 application/runtime path, then capture the first auditable
+H0-004 baseline report using the Step 2–4 infrastructure exactly as accepted.
+
+This is the first measurement step.
+
+It is not a fixture-repair, prompt-tuning, provider-tuning, model-selection, or
+GO / PIVOT / STOP decision step.
+
+### Primary rule
+
+The benchmark must measure the Harness that exists at the start of Step 5.
+
+Do not modify benchmark definitions, expected outcomes, fixture product behavior,
+prompts, provider composition, runtime policy, acceptance semantics, or
+aggregation semantics in response to the measured result.
+
+If the baseline performs poorly, record the poor result.
+
+Do not improve the system during the measurement and then call the new result
+the original baseline.
+
+### Fixed benchmark set
+
+The execution set is exactly the accepted H0-002 suite:
+
+```text
+B01
+B02
+B03
+B04
+B05
+```
+
+Step 5 must not:
+
+```text
+skip a difficult benchmark
+add an easier benchmark
+change expectedOutcome
+change validation commands
+change success criteria
+change fixture source revision
+change the B04 hermeticity overlay
+```
+
+### Baseline runtime composition
+
+The first baseline uses the repository's currently accepted default runtime
+composition.
+
+Step 5 must not introduce a special benchmark-only provider/model composition.
+
+Conceptually:
+
+```text
+benchmark
+  → NormalizedHarnessTask
+  → runHarness(...)
+  → existing default runtime composition
+```
+
+The exact resolved provider/model bindings used by the run must be recorded as
+execution evidence before/with the captured result.
+
+If environment overrides affect the current default composition, the Step 5
+runner must record the resolved values actually used.
+
+Step 5 does not compare alternative providers or models.
+
+### Reproducibility identity
+
+Before execution, capture the source identity of the Harness being measured:
+
+```text
+Harness repository HEAD SHA
+Harness package version
+benchmark fixture revisions
+resolved provider/model bindings
+```
+
+The capture must reject a dirty Harness working tree before starting the real
+suite.
+
+Reason:
+
+the baseline must correspond to one reviewable source state.
+
+Untracked/generated report output created by the Step 5 command itself must not
+be interpreted as pre-existing source dirtiness.
+
+### Fixture preflight
+
+Before any provider-backed benchmark execution:
+
+1. materialize/verify B01-B05 fixtures using the accepted Step 2A materializer;
+2. verify historical fixture provenance/revision integrity;
+3. verify B04 disposable PostgreSQL prerequisites;
+4. verify the report output directory is writable/creatable;
+5. verify required provider runtime configuration is available.
+
+Preflight failure must abort before the first benchmark provider call.
+
+Do not partially run the suite when the deterministic environment is known to
+be invalid.
+
+### Provider preflight boundary
+
+Provider preflight must validate configuration only.
+
+It must not consume an extra planning/reviewer/refiner model call merely to test
+credentials.
+
+Examples of acceptable checks:
+
+```text
+required API environment value exists
+required Claude executable exists when the configured composition uses Claude
+model/provider binding resolves successfully
+```
+
+Live provider behavior is measured by the benchmark itself.
+
+### B04 environment
+
+B04 continues using the accepted disposable PostgreSQL boundary.
+
+Requirements remain:
+
+```text
+fresh disposable database
+same scoped DATABASE_URL / TEST_DATABASE_URL for Harness + validation
+no process.env mutation
+environment cleanup before workspace cleanup
+no mutation/drop of shared qflow_test
+```
+
+Step 5 must not replace this with a shared persistent database for convenience.
+
+### Suite execution semantics
+
+Use the accepted Step 2 suite runner behavior.
+
+For each benchmark:
+
+```text
+run once
+persist/store task result immediately
+continue after task-level infrastructure failure
+do not silently retry the benchmark
+```
+
+A task-level `infrastructure_failed` result remains part of the baseline.
+
+The suite must not automatically rerun a failed task in the same baseline
+capture.
+
+### Distinguish preflight failure from task infrastructure failure
+
+Two failure boundaries must remain distinct:
+
+```text
+preflight failure
+  → suite never starts
+  → no baseline report is accepted
+
+task infrastructure failure
+  → suite already started
+  → task result is infrastructure_failed
+  → suite continues
+  → result remains in baseline report
+```
+
+This avoids producing a misleading partial baseline when the whole environment
+was invalid before execution.
+
+### Step 5 execution service
+
+Create a small application/infrastructure boundary that composes the already
+accepted components.
+
+Preferred direction:
+
+```text
+src/benchmarks/real-suite.ts
+```
+
+Conceptual responsibilities:
+
+```text
+assert clean Harness source state
+collect source/runtime identity
+run deterministic preflight
+run fixed B01-B05 suite
+aggregate suite result
+create comparison report
+render JSON + Markdown
+persist both artifacts atomically
+return capture metadata
+```
+
+It must reuse:
+
+```text
+fixture materialization
+suite runner
+environment preparer
+complete benchmark runner
+aggregation
+comparison report
+```
+
+It must not duplicate their internal algorithms.
+
+### Capture metadata
+
+Step 4 intentionally kept run identity outside
+`BenchmarkComparisonReport schemaVersion=1`.
+
+Step 5 therefore introduces a capture envelope rather than mutating the report
+contract merely to add lifecycle data.
+
+Preferred conceptual shape:
+
+```ts
+export type BenchmarkComparisonCapture = Readonly<{
+  schemaVersion: 1;
+  capturedAt: string;
+  harness: Readonly<{
+    gitRevision: string;
+    packageVersion: string;
+  }>;
+  runtime: Readonly<{
+    roles: Readonly<Record<string, Readonly<{
+      provider: string;
+      model: string;
+    }>>>;
+  }>;
+  fixtures: readonly Readonly<{
+    benchmarkId: string;
+    repositoryId: string;
+    revision: string;
+    sourceRevision: string | null;
+  }>[];
+  report: BenchmarkComparisonReport;
+}>;
+```
+
+Exact type names may be adjusted from repository evidence during implementation,
+but the evidence categories are frozen.
+
+### Timestamp rule
+
+`capturedAt` is lifecycle evidence for a real run and is allowed in the Step 5
+capture envelope.
+
+It must be created once at the outer Step 5 execution boundary.
+
+Do not generate independent timestamps inside:
+
+```text
+suite runner
+aggregation
+report factory
+JSON report renderer
+Markdown report renderer
+```
+
+The Step 4 report remains deterministic from its inputs.
+
+### Provider identity
+
+Do not infer provider identity from model-name string conventions.
+
+The resolved runtime composition must expose or be projected into a stable
+capture representation at the Step 5 boundary.
+
+If the current composition contracts do not expose a stable provider identity,
+implementation must add the smallest outer-boundary projection justified by
+current source evidence.
+
+Do not add provider identity to core planning state merely for reporting.
+
+### Artifact location
+
+Persist the first real baseline under a dedicated repository-local generated
+artifact directory:
+
+```text
+.benchmark-results/h0-004/
+```
+
+The Step 5 command writes exactly:
+
+```text
+baseline.json
+baseline.md
+```
+
+for the first accepted baseline capture.
+
+The directory must be treated as generated benchmark evidence, not product
+source.
+
+Do not introduce timestamped filenames in Step 5.
+
+Reason:
+
+this step captures one canonical H0-004 baseline, not a historical run database.
+
+Future repeated/provider-comparison runs may introduce history/versioned naming
+in a later task if evidence justifies it.
+
+### Atomic persistence
+
+Do not leave a final-looking half-written baseline.
+
+Preferred behavior:
+
+```text
+render both artifacts in memory
+write temporary files
+rename into baseline.json / baseline.md only after both renders succeed
+```
+
+If final persistence fails, the Step 5 command fails.
+
+Do not claim a captured baseline unless both canonical artifacts exist.
+
+### Canonical machine-readable artifact
+
+`baseline.json` is the canonical evidence artifact.
+
+It contains the capture envelope including the exact Step 4 report.
+
+`baseline.md` is the human-readable review artifact and should include:
+
+```text
+capture identity
+Harness git revision/package version
+resolved provider/model bindings
+fixture revisions
+Step 4 Markdown comparison report
+```
+
+The Markdown must not contain metrics that are absent from the canonical JSON
+capture.
+
+### CLI/script boundary
+
+Add one explicit package command for the real suite.
+
+Preferred script:
+
+```text
+benchmark:h0-004-baseline
+```
+
+It may use a thin script under:
+
+```text
+scripts/run-h0-004-baseline.ts
+```
+
+The script owns process-level concerns only:
+
+```text
+invoke Step 5 service
+print artifact paths
+set non-zero exit code on failure
+```
+
+It must not implement benchmark scoring/report algorithms itself.
+
+### Execution result and exit status
+
+A completed baseline capture may contain rejected or infrastructure-failed
+benchmarks and still exit successfully at the process level.
+
+Reason:
+
+```text
+poor benchmark result
+≠
+measurement command failure
+```
+
+The command exits non-zero only when the measurement itself could not be
+completed/captured, for example:
+
+```text
+preflight failure
+unexpected suite/store fatal failure
+aggregation/report construction failure
+artifact persistence failure
+cleanup failure that invalidates execution integrity
+```
+
+Do not make `acceptedTaskCount < selectedTaskCount` a CLI process failure.
+
+### No hidden rerun policy
+
+If Step 5 completes and the baseline contains:
+
+```text
+B01 PASS
+B02 PASS
+B03 rejected
+B04 infrastructure_failed
+B05 blocked/accepted
+```
+
+that is the baseline.
+
+Do not rerun B03/B04 automatically to obtain a cleaner report.
+
+Any later rerun must be an explicit new measurement decision with its own
+recorded rationale.
+
+### Deterministic tests before live execution
+
+Create a deterministic Step 5 test that uses fake/mocked execution dependencies.
+
+Preferred:
+
+```text
+src/test-h0-004-real-suite.ts
+```
+
+It must prove at least:
+
+1. fixed B01-B05 order is preserved;
+2. preflight runs before suite execution;
+3. preflight failure prevents suite execution;
+4. clean-source requirement is enforced;
+5. exactly one suite execution occurs;
+6. task-level infrastructure failure can still produce a completed capture;
+7. aggregation/report are produced from that single suite result;
+8. capture metadata preserves source/runtime/fixture identity;
+9. JSON and Markdown are both persisted;
+10. persistence failure prevents successful capture;
+11. product benchmark failure does not by itself make the command fail;
+12. no task rerun/retry is introduced;
+13. test consumes zero real provider usage.
+
+### Live execution prerequisites
+
+The real baseline command may run only after:
+
+```text
+Step 5 deterministic test gate passes
+full H0-004 regression gate passes
+Harness working tree is clean
+fixtures preflight passes
+provider configuration preflight passes
+B04 PostgreSQL admin configuration is available
+```
+
+### Live baseline run
+
+Run once:
+
+```bash
+npm run benchmark:h0-004-baseline
+```
+
+Do not run this command casually during implementation because it consumes real
+provider usage and constitutes the baseline measurement.
+
+### Post-run verification
+
+After the command completes, verify deterministically:
+
+```text
+.benchmark-results/h0-004/baseline.json exists
+.benchmark-results/h0-004/baseline.md exists
+
+JSON parses
+capture schema version matches
+Harness revision matches measured HEAD
+task order is B01-B05
+selectedTaskCount = 5
+completed + infrastructure failures = 5
+report task count = 5
+Markdown is derived from the same capture/report evidence
+```
+
+### Baseline acceptance versus benchmark success
+
+Step 5 acceptance means:
+
+> the measurement was executed reproducibly and captured correctly.
+
+It does **not** mean:
+
+> the Harness performed well enough to proceed.
+
+Therefore Step 5 can be accepted even with poor SFCR, provided the measurement
+itself is valid.
+
+Performance interpretation belongs to the next checkpoint.
+
+### GO / PIVOT / STOP boundary
+
+Do not automatically proceed to H1/H2 after capturing the baseline.
+
+After Step 5, create a separate H0-004 viability review using the captured
+evidence.
+
+That review must consider at least:
+
+```text
+SFCR
+outcome correctness
+validation success
+human intervention
+infrastructure failures
+Harness duration
+LLM calls
+token evidence
+terminal failure reasons
+task-level evidence for B01-B05
+```
+
+Cost remains unavailable unless an authoritative cost source exists by then.
+
+The review must produce an explicit:
+
+```text
+GO
+PIVOT
+STOP
+```
+
+decision with rationale tied to the baseline evidence.
+
+### Scope
+
+Expected implementation files:
+
+```text
+src/benchmarks/real-suite.ts
+src/test-h0-004-real-suite.ts
+scripts/run-h0-004-baseline.ts
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Additional small source changes are allowed only if exact current contracts
+require a minimal identity/persistence composition hook.
+
+Any such expansion must be justified from source evidence before implementation.
+
+### Non-goals
+
+Step 5 does not:
+
+- tune prompts;
+- change provider/model defaults;
+- compare NVIDIA versus Claude;
+- add dynamic model routing;
+- change benchmark definitions;
+- change fixture product behavior;
+- change expected outcomes;
+- change acceptance semantics;
+- change aggregation semantics;
+- change Step 4 report semantics;
+- automatically retry failed benchmarks;
+- calculate provider cost from public pricing;
+- create a benchmark dashboard;
+- create a benchmark history database;
+- introduce timestamped artifact history;
+- make the GO / PIVOT / STOP decision;
+- begin H1/H2.
+
+### Deterministic implementation gate
+
+Before any live baseline run:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-real-suite && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract && \
+npm run test:h0-004-benchmark-fixture-materialization && \
+npm run test:h0-004-benchmark-postgres-environment && \
+npm run test:h0-004-benchmark-environment
+```
+
+### Full regression gate before live measurement
+
+After the focused Step 5 gate and before consuming real provider usage, run the
+complete H0-004 regression gate.
+
+The exact command must include all currently accepted H0-004, H0-003, H0-002A,
+H0-002, H0-001, and H-ARCH regression gates affected by the execution path.
+
+Only after that gate is green may the real baseline command run.
+
+### Development sequence
+
+```text
+Step 5 spec/decision
+→ commit spec
+
+Step 5 implementation
+→ deterministic focused gate
+→ full regression gate
+
+clean working tree / preflight
+→ one real B01-B05 baseline run
+→ artifact verification
+
+PLAN acceptance metadata
+→ final regression gate
+→ one self-contained Step 5 implementation/evidence commit
+
+then:
+H0-004 GO / PIVOT / STOP review
+```
+
+### Exit condition
+
+Step 5 is complete only when:
+
+```text
+the fixed B01-B05 suite ran once through the accepted real Harness path
+the measured Harness source state is identified
+the actual runtime provider/model bindings are recorded
+all five task results are represented
+the canonical JSON capture is valid
+the Markdown review artifact exists
+artifact evidence matches the measured run
+no benchmark was silently retried/repaired during measurement
+the Engineering Plan records the baseline result
+```
+
+Step 5 completion authorizes only the H0-004 viability review.
+
+It does not authorize H1/H2 implementation.
+
