@@ -20181,3 +20181,520 @@ H0-004 Step 3 — Result Aggregation
 Do not automatically proceed to H1/H2. H0-004 remains the GO / PIVOT / STOP
 checkpoint and must be completed and reviewed first.
 
+## H0-004 Step 3 — Result Aggregation
+
+**Status:** 📋 Specification / decision
+
+### Objective
+
+Transform the persisted task-level `BenchmarkComparisonRecord` evidence produced
+by Step 2 into one deterministic suite-level summary suitable for the H0-004
+GO / PIVOT / STOP review.
+
+Step 3 aggregates evidence only.
+
+It must not execute benchmarks, reinterpret acceptance, call providers, inspect
+workspaces, or invent missing telemetry.
+
+### Input boundary
+
+Step 3 consumes the ordered task results already produced by the accepted
+H0-004 Step 2 suite runner.
+
+Conceptually:
+
+```text
+BenchmarkSuiteRunResult
+  └── tasks[]
+        ├── completed
+        │     └── BenchmarkComparisonRecord
+        └── infrastructure_failed
+              └── deterministic task error
+```
+
+The aggregation layer must preserve the distinction between:
+
+```text
+benchmark completed but not accepted
+```
+
+and:
+
+```text
+benchmark could not produce a normal comparison record because infrastructure
+failed
+```
+
+Infrastructure failure must never be silently treated as a benchmark rejection,
+a successful completion, or missing data that disappears from denominators.
+
+### Output contract direction
+
+Create a suite-level aggregate contract in:
+
+```text
+src/benchmarks/aggregation.ts
+```
+
+Preferred public shape:
+
+```ts
+export type BenchmarkSuiteAggregation = Readonly<{
+  selectedTaskCount: number;
+  completedTaskCount: number;
+  infrastructureFailureCount: number;
+
+  acceptedTaskCount: number;
+  sfcr: number | null;
+
+  outcomeMatchCount: number;
+  outcomeCorrectnessRate: number | null;
+
+  validationPassedCount: number;
+  validationSuccessRate: number | null;
+
+  humanInterventionRequiredCount: number;
+  humanInterventionRate: number | null;
+
+  totalHarnessDurationMs: number;
+  averageHarnessDurationMs: number | null;
+
+  totalLlmCallCount: number;
+  averageLlmCallsPerCompletedTask: number | null;
+
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+
+  cost: number | null;
+
+  terminalFailureReasonCounts: Readonly<Record<string, number>>;
+  infrastructureFailureReasonCounts: Readonly<Record<string, number>>;
+}>;
+```
+
+The exact field names may be adjusted during implementation only if repository
+type evidence requires it. The semantics below are frozen.
+
+### Metric semantics
+
+#### Selected / completed / infrastructure-failed counts
+
+```text
+selectedTaskCount
+  = every task result returned by the suite runner
+
+completedTaskCount
+  = task results with status "completed"
+
+infrastructureFailureCount
+  = task results with status "infrastructure_failed"
+```
+
+Invariant:
+
+```text
+selectedTaskCount
+  = completedTaskCount + infrastructureFailureCount
+```
+
+### SFCR
+
+Primary H0 metric:
+
+```text
+acceptedTaskCount
+  = completed comparison records where accepted === true
+
+sfcr
+  = acceptedTaskCount / selectedTaskCount
+```
+
+The denominator is **all selected benchmark tasks**, not only completed records.
+
+Reason:
+
+an infrastructure failure prevented autonomous successful completion and must
+remain visible in the viability metric.
+
+For an empty selected suite:
+
+```text
+sfcr = null
+```
+
+Do not invent `0%` when no benchmark was selected.
+
+### Outcome correctness
+
+For completed comparison records:
+
+```text
+outcome matches
+  when observedOutcome === expectedOutcome
+```
+
+Rate:
+
+```text
+outcomeCorrectnessRate
+  = outcomeMatchCount / selectedTaskCount
+```
+
+Infrastructure failures therefore reduce suite-level outcome correctness rather
+than disappearing from the metric.
+
+Empty suite:
+
+```text
+outcomeCorrectnessRate = null
+```
+
+### Validation success
+
+For completed comparison records:
+
+```text
+validationPassed === true
+```
+
+Rate:
+
+```text
+validationSuccessRate
+  = validationPassedCount / selectedTaskCount
+```
+
+An infrastructure-failed task cannot count as validation success.
+
+Empty suite:
+
+```text
+validationSuccessRate = null
+```
+
+### Human intervention
+
+For completed comparison records:
+
+```text
+humanInterventionRequired === true
+```
+
+Infrastructure failure is **not** reclassified as human intervention.
+
+Rate:
+
+```text
+humanInterventionRate
+  = humanInterventionRequiredCount / selectedTaskCount
+```
+
+This preserves the difference between:
+
+```text
+autonomy failure caused by human intervention
+```
+
+and:
+
+```text
+suite execution infrastructure failure
+```
+
+Empty suite:
+
+```text
+humanInterventionRate = null
+```
+
+### Latency
+
+Only completed records contain authoritative Harness duration evidence.
+
+Aggregate:
+
+```text
+totalHarnessDurationMs
+  = sum(comparison.harnessDurationMs) for completed tasks
+
+averageHarnessDurationMs
+  = totalHarnessDurationMs / completedTaskCount
+```
+
+Infrastructure-failure wall-clock duration is not currently part of the
+comparison evidence and must not be guessed.
+
+No completed tasks:
+
+```text
+averageHarnessDurationMs = null
+totalHarnessDurationMs = 0
+```
+
+### LLM call counts
+
+Only completed comparison records carry accepted per-task LLM call evidence.
+
+```text
+totalLlmCallCount
+  = sum(comparison.llmCallCount)
+
+averageLlmCallsPerCompletedTask
+  = totalLlmCallCount / completedTaskCount
+```
+
+No completed tasks:
+
+```text
+averageLlmCallsPerCompletedTask = null
+totalLlmCallCount = 0
+```
+
+Do not divide by selectedTaskCount because infrastructure-failed tasks have no
+authoritative LLM-call comparison record.
+
+### Token aggregation
+
+Step 1 already established source-safe task-level token semantics:
+
+```text
+zero calls
+  → known token total = 0
+
+one or more calls with complete usage
+  → known summed token total
+
+one or more calls with incomplete usage
+  → null
+```
+
+Step 3 extends the same rule across completed task records.
+
+For each token field independently:
+
+```text
+no completed tasks
+  → 0
+
+every completed comparison reports a non-null aggregate
+  → sum
+
+any completed comparison reports null
+  → null
+```
+
+Infrastructure-failed tasks do not fabricate token evidence and do not
+automatically force token aggregates to null; they are represented explicitly by
+`infrastructureFailureCount`.
+
+This preserves the difference between:
+
+```text
+usage evidence incomplete for a completed benchmark
+```
+
+and:
+
+```text
+benchmark never produced a comparison record
+```
+
+### Cost
+
+Current comparison evidence has no authoritative cost data.
+
+Therefore Step 3 must retain:
+
+```text
+cost = null
+```
+
+Do not infer cost from tokens, model names, public pricing, or provider defaults
+inside the aggregation layer.
+
+Cost calculation requires an explicit later evidence source.
+
+### Failure-reason aggregation
+
+Completed task records may expose:
+
+```text
+terminalFailureReason
+```
+
+Aggregate each non-empty value into:
+
+```text
+terminalFailureReasonCounts
+```
+
+Infrastructure-failed task results must aggregate their deterministic serialized
+error reason/code separately into:
+
+```text
+infrastructureFailureReasonCounts
+```
+
+Do not merge both categories.
+
+They represent different failure boundaries.
+
+### Purity and determinism
+
+The aggregator must be a pure transformation.
+
+It must not:
+
+```text
+read/write files
+load fixture repositories
+call the Harness
+run validation commands
+call providers
+use Date.now()
+generate IDs
+read process.env
+mutate input records
+persist reports
+```
+
+Given identical suite task results, it must return structurally identical output.
+
+### Deterministic tests
+
+Create:
+
+```text
+src/test-h0-004-benchmark-aggregation.ts
+```
+
+The focused test must cover at least:
+
+1. **all accepted completed tasks**
+   - SFCR = 1;
+   - outcome/validation rates = 1;
+   - intervention rate = 0;
+   - latency and LLM calls aggregate correctly.
+
+2. **mixed accepted/rejected completed tasks**
+   - accepted count and SFCR use all selected tasks;
+   - rejection does not erase telemetry.
+
+3. **infrastructure failure**
+   - selected denominator includes the failed task;
+   - completed count excludes it;
+   - SFCR/outcome/validation reflect the failure;
+   - infrastructure reason is counted separately;
+   - human intervention is not synthesized.
+
+4. **incomplete token evidence**
+   - one completed record with a null token field makes that suite token field
+     null;
+   - other token fields remain independently aggregatable.
+
+5. **zero-call completed task**
+   - zero remains known usage rather than null.
+
+6. **empty suite**
+   - counts are zero;
+   - rate/average metrics are null;
+   - token totals follow the explicit empty-suite semantics;
+   - cost remains null.
+
+7. **failure-reason grouping**
+   - repeated reasons increment stable counts;
+   - terminal and infrastructure failures remain distinct.
+
+8. **input immutability**
+   - aggregation does not mutate the supplied suite result.
+
+### Scope
+
+Create:
+
+```text
+src/benchmarks/aggregation.ts
+src/test-h0-004-benchmark-aggregation.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+only when implementation begins.
+
+This specification patch changes only:
+
+```text
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+### Non-goals
+
+Step 3 does not:
+
+- execute B01-B05;
+- introduce a second suite runner;
+- persist an aggregate report;
+- render CLI/Markdown/JSON reports;
+- make GO / PIVOT / STOP automatically;
+- define viability thresholds;
+- compare multiple models/providers;
+- calculate model cost from public pricing;
+- change benchmark acceptance semantics;
+- change comparison-record semantics;
+- change suite-runner continuation policy;
+- change B04 fixtures/environment isolation;
+- change telemetry contracts;
+- change providers, graph, prompts, models, or runtime composition;
+- begin H1 Repository Intelligence or H2 Context Engine.
+
+### Focused implementation gate
+
+After implementation:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+### Full regression requirement
+
+Step 3 is not accepted from the focused gate alone.
+
+Required sequence remains:
+
+```text
+spec/decision
+→ implementation
+→ focused deterministic tests
+→ PLAN implementation/acceptance metadata
+→ full H0-004 regression gate
+→ one self-contained commit
+```
+
+### Exit condition
+
+Step 3 is complete when suite-level aggregation is deterministic, preserves
+missing/infrastructure evidence correctly, all focused/full gates are green, and
+the Engineering Plan records the accepted metric semantics.
+
+Only then proceed to the next H0-004 step.
+
+The later H0-004 final checkpoint must still review real benchmark evidence and
+make the explicit:
+
+```text
+GO
+PIVOT
+STOP
+```
+
+decision before H1/H2 work begins.
+
