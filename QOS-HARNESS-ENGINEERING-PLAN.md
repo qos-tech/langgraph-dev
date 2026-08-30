@@ -21830,11 +21830,15 @@ The real baseline command may run only after:
 ```text
 Step 5 deterministic test gate passes
 full H0-004 regression gate passes
-Harness working tree is clean
+Step 5 implementation is committed
+Harness working tree is clean at that implementation commit
 fixtures preflight passes
 provider configuration preflight passes
 B04 PostgreSQL admin configuration is available
 ```
+
+The captured `harness.gitRevision` must equal that Step 5 implementation commit
+HEAD.
 
 ### Live baseline run
 
@@ -21926,6 +21930,17 @@ package.json
 QOS-HARNESS-ENGINEERING-PLAN.md
 ```
 
+The live evidence capture later adds:
+
+```text
+.benchmark-results/h0-004/baseline.json
+.benchmark-results/h0-004/baseline.md
+```
+
+These two canonical baseline artifacts are intentionally tracked evidence for
+the H0-004 viability checkpoint. Do not add `.benchmark-results/` to
+`.gitignore` in Step 5.
+
 Additional small source changes are allowed only if exact current contracts
 require a minimal identity/persistence composition hook.
 
@@ -21981,6 +21996,23 @@ Only after that gate is green may the real baseline command run.
 
 ### Development sequence
 
+The original Step 5 sequence contained one contradictory requirement:
+
+```text
+working tree must be clean before the real baseline
+```
+
+while also requiring:
+
+```text
+implementation changes remain uncommitted until after the real baseline
+```
+
+Those conditions cannot both be true while measuring the exact code being
+executed.
+
+Step 5 therefore uses two explicit commit boundaries:
+
 ```text
 Step 5 spec/decision
 → commit spec
@@ -21988,18 +22020,29 @@ Step 5 spec/decision
 Step 5 implementation
 → deterministic focused gate
 → full regression gate
+→ implementation commit
 
-clean working tree / preflight
+clean working tree at the implementation commit
+→ deterministic preflight
 → one real B01-B05 baseline run
 → artifact verification
 
-PLAN acceptance metadata
+PLAN baseline acceptance metadata
++ canonical baseline.json
++ baseline.md
 → final regression gate
-→ one self-contained Step 5 implementation/evidence commit
+→ evidence commit
 
 then:
 H0-004 GO / PIVOT / STOP review
 ```
+
+The implementation commit is the exact Harness source revision recorded by the
+baseline capture.
+
+The evidence commit must not change runtime source behavior. It contains only
+the captured baseline artifacts and acceptance/documentation metadata required
+to audit the measurement.
 
 ### Exit condition
 
@@ -22018,6 +22061,18 @@ the Engineering Plan records the baseline result
 ```
 
 Step 5 completion authorizes only the H0-004 viability review.
+
+Commit-boundary invariant:
+
+```text
+baseline harness.gitRevision
+  = Step 5 implementation commit
+
+evidence commit
+  = baseline artifacts + PLAN metadata only
+```
+
+The evidence commit must not alter the Harness implementation that was measured.
 
 It does not authorize H1/H2 implementation.
 
