@@ -59,6 +59,7 @@
     "test:h0-003-benchmark-observation": "tsx src/test-h0-003-benchmark-observation.ts",
     "test:h0-003-complete-benchmark-runner": "tsx src/test-h0-003-complete-benchmark-runner.ts",
     "test:h0-004-comparison-contract": "tsx src/test-h0-004-comparison-contract.ts",
+    "test:h0-004-benchmark-aggregation": "tsx src/test-h0-004-benchmark-aggregation.ts",
     "test:h0-004-benchmark-suite-runner": "tsx src/test-h0-004-benchmark-suite-runner.ts",
     "test:h0-004-benchmark-fixture-materialization": "tsx src/test-h0-004-benchmark-fixture-materialization.ts",
     "test:h0-004-benchmark-environment": "tsx src/test-h0-004-benchmark-environment.ts",

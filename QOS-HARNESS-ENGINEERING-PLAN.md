@@ -20183,7 +20183,7 @@ checkpoint and must be completed and reviewed first.
 
 ## H0-004 Step 3 — Result Aggregation
 
-**Status:** 📋 Specification / decision
+**Status:** ✅ Accepted
 
 ### Objective
 
@@ -20697,4 +20697,195 @@ STOP
 ```
 
 decision before H1/H2 work begins.
+
+### Step 3 implementation record
+
+Implemented the pure suite aggregation boundary in:
+
+```text
+src/benchmarks/aggregation.ts
+```
+
+with deterministic coverage in:
+
+```text
+src/test-h0-004-benchmark-aggregation.ts
+```
+
+and the package gate:
+
+```text
+test:h0-004-benchmark-aggregation
+```
+
+The implementation consumes only `BenchmarkSuiteRunResult` and preserves the
+accepted Step 2 distinction between completed comparison records and
+`infrastructure_failed` task results.
+
+Implemented metric semantics:
+
+```text
+SFCR
+  → accepted completed tasks / all selected tasks
+
+outcome correctness
+  → matching completed outcomes / all selected tasks
+
+validation success
+  → validation-passed completed tasks / all selected tasks
+
+human intervention rate
+  → intervention-required completed tasks / all selected tasks
+
+Harness latency
+  → completed comparison records only
+
+LLM call averages
+  → completed comparison records only
+
+token totals
+  → sum when every completed record has evidence
+  → null independently per token field when any completed record is null
+  → 0 when there are no completed records
+
+cost
+  → null
+```
+
+Infrastructure failures remain explicit in the selected-task denominators but
+are not reclassified as human intervention and do not fabricate latency, LLM
+usage, token, or terminal Harness evidence.
+
+Because the current `BenchmarkSuiteTaskError` contract contains deterministic
+`name` and `message` fields but no normalized infrastructure error code, Step 3
+groups infrastructure failure reasons by `error.name`. It does not invent a new
+error taxonomy in the aggregation layer.
+
+Completed Harness terminal failures continue to group separately by the existing
+`terminalFailureReason` string.
+
+The aggregator is pure and does not execute benchmarks, read environment state,
+persist output, call providers, use clocks/IDs, mutate task results, or inspect
+repositories.
+
+Deterministic tests cover:
+
+```text
+all-accepted suite
+mixed accepted/rejected completed tasks
+infrastructure failure denominator behavior
+independent incomplete-token propagation
+known zero-call usage
+empty-suite semantics
+terminal/infrastructure failure grouping
+input immutability
+```
+
+No runner, comparison-record, acceptance, provider, telemetry, fixture, or B04
+environment behavior is changed by this implementation.
+
+Run the focused gate before adding acceptance metadata:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+### Step 3 acceptance record
+
+The focused deterministic Step 3 gate passed in the development environment:
+
+```text
+npm run typecheck                              PASS
+npm run test:h0-004-benchmark-aggregation     PASS
+npm run test:h0-004-benchmark-suite-runner    PASS
+npm run test:h0-004-comparison-contract       PASS
+```
+
+Accepted aggregation semantics:
+
+```text
+selectedTaskCount
+  = all suite task results
+
+completedTaskCount
+  = status "completed"
+
+infrastructureFailureCount
+  = status "infrastructure_failed"
+
+acceptedTaskCount
+  = completed comparison records with accepted=true
+
+SFCR
+  = acceptedTaskCount / selectedTaskCount
+  = null only for an empty selected suite
+
+outcomeCorrectnessRate
+  = completed matching outcomes / selectedTaskCount
+
+validationSuccessRate
+  = completed validation-passed records / selectedTaskCount
+
+humanInterventionRate
+  = completed intervention-required records / selectedTaskCount
+
+average Harness duration
+  = completed records only
+
+average LLM calls
+  = completed records only
+```
+
+Infrastructure failures remain visible in the suite-level completion/outcome/
+validation denominators but are not reclassified as human intervention and do
+not fabricate Harness duration or LLM usage evidence.
+
+Accepted token semantics remain source-safe and field-independent:
+
+```text
+no completed records
+  → 0
+
+all completed records have known value
+  → sum
+
+any completed record has null for that token field
+  → null for that field
+```
+
+Cost remains:
+
+```text
+null
+```
+
+because no authoritative cost evidence exists in the current comparison
+contract.
+
+Failure categories remain intentionally separate:
+
+```text
+terminalFailureReasonCounts
+  → completed Harness terminal reasons
+
+infrastructureFailureReasonCounts
+  → BenchmarkSuiteTaskError.name
+```
+
+No new infrastructure error taxonomy is invented in Step 3.
+
+The deterministic test also proves the aggregation function does not mutate its
+input suite result.
+
+### Step 3 full-gate requirement
+
+Focused acceptance does not close the implementation commit.
+
+Before committing Step 3, run the complete H0-004 regression gate after this
+acceptance metadata is applied.
+
+Only a green full gate may close the Step 3 implementation commit.
 
