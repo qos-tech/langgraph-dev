@@ -25033,3 +25033,242 @@ B: NVIDIA / nvidia/nemotron-3.5-lightning-30b-a3b
 The probe must remain separate from the benchmark suite and must record live
 latency/error evidence rather than model quality.
 
+## H0-004B Step 2 — Isolated Live Provider Probe Implementation
+
+**Status:** 🧪 Implemented — deterministic probe-boundary gate pending
+
+### Objective
+
+Create a bounded diagnostic probe that compares the same NVIDIA structured-output
+scenario across the two current model routes without executing B01-B05.
+
+The probe is diagnostic evidence, not a model-quality benchmark.
+
+### Controlled comparison
+
+The live sequence alternates models by round:
+
+```text
+round 1:
+  openai/gpt-oss-20b
+  nvidia/nemotron-3.5-lightning-30b-a3b
+
+round 2:
+  openai/gpt-oss-20b
+  nvidia/nemotron-3.5-lightning-30b-a3b
+
+round 3:
+  openai/gpt-oss-20b
+  nvidia/nemotron-3.5-lightning-30b-a3b
+```
+
+All calls use the same:
+
+```text
+provider = NVIDIA
+prompt = tiny fixed structured-output probe
+maxOutputTokens = 256
+transportRetries = 0
+diagnostic deadline = 120000 ms
+```
+
+`transportRetries=0` is deliberate.
+
+The purpose is to compare one transport/model-route attempt at a time without
+allowing adapter retry/backoff to obscure whether a prolonged stall follows a
+specific model route.
+
+### Diagnostic deadline
+
+The 120-second deadline exists only inside the H0-004B live probe.
+
+It is not a production runtime policy and does not modify:
+
+```text
+executeStructuredLlm
+runtime composition
+NVIDIA adapter defaults
+benchmark execution
+```
+
+The deadline uses the already-accepted cooperative `AbortSignal` path, so an
+expired probe call aborts the underlying NVIDIA fetch rather than only stopping
+an outer await.
+
+The value is intentionally diagnostic: it is more than seven times the
+approximately 16.7-second successful reviewer latency observed before the
+H0-004A stall, while preventing another multi-minute unbounded diagnostic hang.
+
+No production timeout value is accepted by this step.
+
+### Evidence artifact
+
+The committed live wrapper writes exactly one artifact per Harness SHA:
+
+```text
+~/.cache/qos-harness/probes/h0-004b/<implementation-sha>/probe.json
+```
+
+The wrapper requires:
+
+```text
+clean Harness worktree
+artifact absent for current SHA
+```
+
+and records:
+
+```text
+Harness SHA
+provider
+models
+rounds
+diagnostic timeout
+provider hints
+per-call sequence index
+round
+startedAt
+finishedAt
+durationMs
+success/error/timeout
+provider elapsed time when available
+usage when available
+error text when present
+```
+
+An existing artifact for the same SHA is non-rerunnable by design.
+
+### Files
+
+Create:
+
+```text
+src/benchmarks/provider-reliability-probe.ts
+src/test-h0-004b-provider-probe.ts
+scripts/run-h0-004b-provider-probe.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify production provider/runtime/graph behavior.
+
+### Deterministic gate before commit
+
+```bash
+npm run typecheck && \
+npm run test:h0-004b-provider-probe && \
+npm run test:h0-004b-provider-reliability-characterization && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution
+```
+
+This gate must consume zero real provider usage.
+
+### Live authorization rule
+
+Do not run the live probe until:
+
+```text
+deterministic gate passes
+probe implementation is committed
+worktree is clean
+exact implementation SHA is frozen
+external probe target is absent
+```
+
+Then run exactly once for that SHA:
+
+```bash
+npm run probe:h0-004b-provider-reliability
+```
+
+Bad/timeout/error observations are valid evidence and must not be erased by
+rerunning the same SHA.
+
+### Interpretation boundary
+
+The probe answers only:
+
+```text
+does prolonged latency/stall appear to follow openai/gpt-oss-20b specifically,
+or does it also appear on nvidia/nemotron-3.5-lightning-30b-a3b under the same
+NVIDIA provider and diagnostic call shape?
+```
+
+It does not decide model quality, SFCR, benchmark acceptance, or production
+timeout policy.
+
+## H0-004B Step 2 Deterministic Validation Record
+
+**Status:** ✅ Accepted for live probe execution
+
+The deterministic Step 2 gate passed in the development environment:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004b-provider-probe && \
+npm run test:h0-004b-provider-reliability-characterization && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution
+```
+
+Accepted probe boundary:
+
+```text
+provider
+  → NVIDIA only
+
+models
+  → openai/gpt-oss-20b
+  → nvidia/nemotron-3.5-lightning-30b-a3b
+
+sequence
+  → alternating by round
+  → 3 rounds
+  → 6 total calls
+
+per-call controls
+  → identical tiny structured-output prompt
+  → maxOutputTokens = 256
+  → transportRetries = 0
+  → diagnostic deadline = 120000 ms
+```
+
+The deterministic gate consumed zero real provider usage and did not execute
+B01-B05.
+
+### Live execution authorization
+
+The Step 2 source must now be committed before any real provider call.
+
+After commit:
+
+```text
+worktree
+  → clean
+
+implementation SHA
+  → exact and frozen
+
+probe artifact
+  → ~/.cache/qos-harness/probes/h0-004b/<implementation-sha>/probe.json
+  → must not already exist
+```
+
+Then exactly one live execution is authorized for that SHA:
+
+```bash
+npm run probe:h0-004b-provider-reliability
+```
+
+Timeouts and provider errors are valid observations.
+
+Do not rerun the same SHA merely to improve or replace the evidence.
+
+Do not run B01-B05 as part of this diagnostic step.
+
