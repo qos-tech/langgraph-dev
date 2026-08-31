@@ -23441,3 +23441,378 @@ H0-004A Step 2 — Terminal Evidence Contract
 Only after Step 2 is specified and accepted may production observation behavior
 change.
 
+## H0-004A Step 2 — Terminal Evidence Contract
+
+**Status:** 📋 Specification / decision
+
+### Objective
+
+Define the smallest deterministic terminal-evidence contract required to represent
+current Harness terminal states without changing benchmark domain outcomes,
+acceptance semantics, provider behavior, prompts, models, attempt limits, or fixed
+benchmark definitions.
+
+Step 2 is contract design only.
+
+It must not yet change the runtime observation behavior.
+
+### Inputs proven by Step 1
+
+Step 1 established these current facts:
+
+```text
+planningAttempts increments once per PLAN call
+
+planning exhaustion:
+  planningAttempts >= maxPlanningAttempts
+  review router returns failed
+
+failed terminal node:
+  state.status = failed
+  refinedPlan is not synthesized
+  failureReason is not synthesized for exhaustion
+
+blocked-with-plan:
+  refinedPlan.outcome = blocked
+  failed terminal status can still represent a valid benchmark domain outcome
+
+provider/runtime exception:
+  propagates through invokeGraph/runHarness
+  no HarnessRunResult is produced
+
+telemetry.finalStatus:
+  cannot determine benchmark domain outcome by itself
+```
+
+The Step 2 contract must encode only what can be supported by those deterministic
+facts.
+
+### Architectural boundary
+
+Introduce terminal evidence at the benchmark observation boundary, not inside the
+benchmark expected-outcome domain.
+
+Preferred direction:
+
+```ts
+type HarnessTerminalKind =
+  | "completed_with_plan"
+  | "blocked_with_plan"
+  | "planning_exhausted";
+```
+
+Do **not** add `provider_failed` to this returned-state contract in Step 2.
+
+Current provider/runtime exceptions do not produce `HarnessRunResult`, so adding a
+returned terminal kind would fabricate evidence the current runtime does not expose.
+
+Provider/runtime exceptions remain propagated execution failures until a later,
+separately specified boundary is introduced.
+
+### Preferred terminal evidence contract
+
+Preferred shape:
+
+```ts
+export type HarnessTerminalEvidence = Readonly<{
+  kind: HarnessTerminalKind;
+  status: DevStateType["status"];
+  failureReason: string | null;
+  planningAttempts: number;
+  maxPlanningAttempts: number;
+  reviewAttempts: number;
+  refinedPlanOutcome: BenchmarkExpectedOutcome | null;
+}>;
+```
+
+Exact exported names may be refined during implementation, but the semantic fields
+are frozen unless current source contracts make one of them redundant.
+
+### Derivation rules
+
+#### `completed_with_plan`
+
+Derive only when:
+
+```text
+refinedPlan exists
+refinedPlan.outcome ∈ {changes_required, already_satisfied}
+state.status = completed
+failureReason absent
+```
+
+The existing benchmark domain outcome remains:
+
+```text
+refinedPlan.outcome
+```
+
+#### `blocked_with_plan`
+
+Derive only when:
+
+```text
+refinedPlan exists
+refinedPlan.outcome = blocked
+state.status = failed
+failureReason present
+```
+
+The existing benchmark domain outcome remains:
+
+```text
+blocked
+```
+
+#### `planning_exhausted`
+
+Derive only when:
+
+```text
+refinedPlan absent
+state.status = failed
+planningAttempts >= maxPlanningAttempts
+```
+
+and the run has returned normally from the Harness lifecycle.
+
+`failureReason` may be absent for this terminal kind because current exhaustion
+routing does not synthesize one.
+
+Planning exhaustion must **not** produce a benchmark domain outcome automatically.
+
+Therefore:
+
+```text
+terminal.kind = planning_exhausted
+finalOutcome = null
+```
+
+at the observation boundary.
+
+### Invalid / inconsistent evidence
+
+The terminal classifier must reject inconsistent combinations rather than
+fabricating a terminal kind.
+
+Examples:
+
+```text
+refinedPlan.outcome = blocked + state.status = completed
+refinedPlan.outcome = changes_required + state.status = failed
+refinedPlan.outcome = already_satisfied + failureReason present
+refinedPlan absent + planningAttempts < maxPlanningAttempts + state.status = failed
+```
+
+These remain derivation errors unless a later specification establishes a distinct
+supported terminal category.
+
+### Benchmark observation contract direction
+
+The current `BenchmarkRunObservation` domain outcome must become nullable so a
+valid measured Harness terminal can exist without a benchmark-domain outcome.
+
+Preferred shape:
+
+```ts
+type BenchmarkRunObservation = Readonly<{
+  finalOutcome: BenchmarkExpectedOutcome | null;
+  terminal: HarnessTerminalEvidence;
+  filesChanged: readonly string[];
+  validationPassed: boolean;
+  humanInterventionRequired: boolean;
+}>;
+```
+
+The important invariant is:
+
+```text
+finalOutcome = null
+```
+
+means:
+
+```text
+the Harness run was measured successfully but did not produce one of the benchmark
+domain outcomes
+```
+
+It does **not** mean:
+
+```text
+benchmark infrastructure failed
+```
+
+### Acceptance semantics direction
+
+Existing successful acceptance remains unchanged when:
+
+```text
+finalOutcome !== null
+```
+
+For:
+
+```text
+finalOutcome = null
+```
+
+the acceptance evaluator must reject the task deterministically with a stable
+failure category rather than throw.
+
+Preferred new acceptance failure category:
+
+```text
+terminal_outcome_unavailable
+```
+
+The failure should preserve terminal evidence so comparison/report layers can expose
+why the domain outcome was unavailable.
+
+Do not map:
+
+```text
+planning_exhausted → blocked
+```
+
+even when the benchmark expected outcome is `blocked`.
+
+The expected outcome must not participate in terminal classification.
+
+### Comparison semantics direction
+
+A measured task that reaches `planning_exhausted` should eventually be represented
+as:
+
+```text
+status = completed
+accepted = false
+observedOutcome = null
+terminalFailureReason = planning_exhausted
+```
+
+or an equivalent stable representation supported by current comparison contracts.
+
+It must not be normalized by the suite runner as:
+
+```text
+infrastructure_failed
+```
+
+solely because no `refinedPlan` exists.
+
+### Aggregation compatibility
+
+Step 2 does not change aggregation yet.
+
+The later implementation must preserve these invariants:
+
+```text
+selectedTaskCount unchanged
+completedTaskCount includes measurable rejected planning-exhausted tasks
+infrastructureFailureCount excludes measurable planning-exhausted tasks
+acceptedTaskCount unchanged by observability alone
+SFCR denominator remains the fixed selected-task count
+```
+
+No historical H0-004 baseline artifact is recomputed.
+
+### Error-boundary rule
+
+The contract must preserve three distinct layers:
+
+```text
+1. returned Harness terminal evidence
+   → completed_with_plan / blocked_with_plan / planning_exhausted
+
+2. propagated Harness/provider/runtime exception
+   → execution exception, no HarnessRunResult
+
+3. benchmark/measurement infrastructure exception
+   → suite infrastructure_failed
+```
+
+Step 2 defines only layer 1.
+
+Do not collapse layers 2 or 3 into the terminal-evidence contract.
+
+### Files changed / validation / intervention
+
+Existing evidence ownership remains unchanged:
+
+```text
+filesChanged
+  ← deterministic Git workspace evidence
+
+validationPassed
+  ← existing BenchmarkValidationResult
+
+humanInterventionRequired
+  ← explicit runner lifecycle evidence
+```
+
+None of these fields may be inferred from terminal kind.
+
+### Expected implementation scope after Step 2 acceptance
+
+Likely implementation files:
+
+```text
+src/benchmarks/observation.ts
+src/benchmarks/acceptance.ts
+src/benchmarks/comparison.ts
+src/benchmarks/complete-runner.ts
+src/test-h0-003-benchmark-observation.ts
+new H0-004A focused test(s)
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+`aggregation.ts`, `report.ts`, or `suite-runner.ts` may change only if exact current
+contracts require a minimal projection to preserve terminal evidence.
+
+Any such expansion must be justified from source evidence before implementation.
+
+### Non-goals
+
+Step 2 does not:
+
+- change production behavior yet;
+- add provider failure normalization;
+- catch provider/runtime exceptions in `runHarness`;
+- change B01-B05 definitions;
+- change expected outcomes;
+- change fixture revisions;
+- change prompts or models;
+- change planning limits;
+- change validation commands;
+- change acceptance thresholds;
+- add H1/H2 capability work;
+- change historical baseline artifacts.
+
+### Required Step 2 contract tests after implementation
+
+The later implementation must prove:
+
+```text
+1. completed changes_required derives completed_with_plan + domain outcome
+2. completed already_satisfied derives completed_with_plan + domain outcome
+3. blocked derives blocked_with_plan + blocked outcome
+4. planning exhaustion derives planning_exhausted + finalOutcome=null
+5. planning exhaustion does not throw observation infrastructure error
+6. refinedPlan absence below exhaustion remains derivation error
+7. inconsistent plan/status combinations remain derivation errors
+8. expected benchmark outcome does not influence terminal classification
+9. planning_exhausted task is measured/rejected, not infrastructure_failed
+10. filesChanged/validation/intervention semantics remain unchanged
+11. provider/runtime exception propagation remains unchanged
+12. zero real provider usage in focused tests
+```
+
+### Exit condition
+
+Step 2 is accepted when the repository records a precise terminal-evidence and
+nullable-domain-outcome contract that is consistent with Step 1 characterization.
+
+Only after Step 2 acceptance may H0-004A Step 3 implement the contract.
+
