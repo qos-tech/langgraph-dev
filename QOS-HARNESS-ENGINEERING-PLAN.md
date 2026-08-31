@@ -23205,3 +23205,239 @@ GO / PIVOT / STOP is decided again
 
 H1/H2 remain blocked until that second viability checkpoint.
 
+
+## H0-004A Step 1 — Terminal State Characterization
+
+**Status:** 🧪 Implemented — deterministic gate pending
+
+### Characterization evidence
+
+Step 1 adds a source-level deterministic characterization test only:
+
+```text
+src/test-h0-004a-terminal-state-characterization.ts
+```
+
+No production runtime source changes are introduced.
+
+The characterized current behavior is:
+
+```text
+planning attempt increment
+  = state.planningAttempts + 1
+
+planning exhaustion boundary
+  = state.planningAttempts >= state.maxPlanningAttempts
+
+review decision enough_context
+  → refine before exhaustion check
+
+planning exhaustion
+  → reviewRouter returns failed
+  → failedNode returns status=failed
+  → failedNode does not synthesize refinedPlan
+  → failedNode does not synthesize failureReason
+```
+
+Therefore the canonical B04/B05 shape can legitimately reach:
+
+```text
+status = failed
+planningAttempts >= maxPlanningAttempts
+refinedPlan = absent
+failureReason = absent
+```
+
+without a benchmark/measurement infrastructure defect.
+
+The existing observation contract still intentionally rejects that shape in
+Step 1:
+
+```text
+refinedPlan absent
+  → BenchmarkObservationDerivationError
+```
+
+That behavior remains unchanged until the later H0-004A classification step.
+
+Blocked-with-plan behavior is also preserved and characterized separately:
+
+```text
+refinedPlan.outcome = blocked
+failureReason present
+terminal status = failed
+  → existing observation may derive blocked
+```
+
+This proves that graph `failed` status alone cannot identify infrastructure
+failure or benchmark-domain failure.
+
+### Provider/runtime exception gap
+
+Current provider-neutral execution returns the concrete provider promise
+directly.
+
+`runHarness` awaits `invokeGraph(...)` without a catch/normalization boundary.
+
+Therefore a provider/runtime exception before a graph state is returned:
+
+```text
+propagates as an exception
+returns no HarnessRunResult
+has no terminal DevState available to observation
+```
+
+The current contracts consequently do **not** expose enough returned-state
+evidence to classify provider failure as a normal Harness terminal kind.
+
+H0-004A must preserve this distinction. A later behavior step may introduce a
+narrow explicit error boundary if required, but Step 1 does not fabricate a
+provider terminal state from missing evidence.
+
+### Safety characterization
+
+The test also locks the accepted H0-003 rules:
+
+```text
+changes_required / already_satisfied
+  require completed + no failureReason
+
+blocked
+  requires failed + failureReason
+
+refinedPlan absent
+  remains a derivation error today
+
+telemetry.finalStatus
+benchmark ID
+benchmark expectedOutcome
+  do not drive outcome derivation
+```
+
+The characterization consumes zero real provider calls and does not modify:
+
+```text
+B01-B05
+fixtures
+prompts
+models
+provider composition
+planning attempt limits
+acceptance semantics
+observation behavior
+```
+
+### Focused deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004a-terminal-state-characterization && \
+npm run test:h0-003-benchmark-observation && \
+npm run test:h0-003-complete-benchmark-runner
+```
+
+After the focused gate passes, run the complete H0 regression gate before
+accepting Step 1.
+
+### Step 1 exit decision
+
+If the focused/full gates remain green, Step 1 establishes enough evidence to
+proceed to:
+
+```text
+H0-004A Step 2 — Terminal Evidence Contract
+```
+
+Step 2 must distinguish planning exhaustion from completed/blocked plan states
+without using benchmark expectations, while separately addressing the observed
+provider-exception evidence gap.
+
+### H0-004A Step 1 acceptance record
+
+**Status:** ✅ Accepted
+
+Focused deterministic gate:
+
+```text
+PASS
+```
+
+Full H0 regression gate:
+
+```text
+PASS
+exit code = 0
+```
+
+Accepted characterization findings:
+
+```text
+PLAN increments:
+  planningAttempts = previous + 1
+
+planning exhaustion boundary:
+  planningAttempts >= maxPlanningAttempts
+
+review-router exhaustion behavior:
+  → route = failed
+
+failed terminal node:
+  → state.status = failed
+  → does not synthesize refinedPlan
+  → does not synthesize failureReason
+
+blocked-with-plan:
+  → remains distinguishable from planning exhaustion
+  → refinedPlan.outcome = blocked
+  → failed terminal status may still represent a valid benchmark domain outcome
+
+provider/runtime exception before terminal state:
+  → propagates through invokeGraph/runHarness
+  → no HarnessRunResult is produced
+  → therefore no provider_failed terminal state exists in the current returned-state contract
+
+telemetry.finalStatus:
+  → is not sufficient to determine benchmark domain outcome
+```
+
+No production behavior changed in Step 1.
+
+No benchmark definitions, fixture revisions, prompts, providers, models, execution
+limits, acceptance rules, or aggregation semantics changed.
+
+### Step 1 conclusion
+
+The current source evidence is sufficient to distinguish:
+
+```text
+completed_with_plan
+blocked_with_plan
+planning_exhausted
+```
+
+from one another.
+
+The current returned Harness state is **not** sufficient to represent a provider
+exception as a terminal state because provider/runtime exceptions propagate before
+`HarnessRunResult` is produced.
+
+Therefore H0-004A Step 2 must define the smallest deterministic terminal-evidence
+contract that:
+
+```text
+preserves existing successful/blocked semantics
+represents planning exhaustion without requiring refinedPlan
+does not fabricate provider_failed state
+keeps propagated provider/runtime exceptions distinct from returned Harness terminal states
+keeps benchmark infrastructure failures distinct from Harness lifecycle results
+```
+
+Proceed to:
+
+```text
+H0-004A Step 2 — Terminal Evidence Contract
+```
+
+Only after Step 2 is specified and accepted may production observation behavior
+change.
+
