@@ -24870,3 +24870,166 @@ H0-004A is not rerun
 provider/model changes are diagnostic only, not benchmark-score tuning
 ```
 
+## H0-004B Step 1 Implementation Record
+
+**Status:** 🧪 Implemented — focused deterministic gate pending
+
+### Source evidence
+
+The current accepted provider runtime already establishes the required
+characterization boundary:
+
+```text
+executeStructuredLlm(...)
+  → exactly one provider.generateStructured(...) invocation
+  → forwards request.signal when present
+  → creates no Harness whole-call timeout
+  → creates no Harness whole-call retry
+
+StructuredLlmRequest
+  → signal?: AbortSignal
+  → providerHints.transportRetries is explicitly provider/transport-owned
+
+NVIDIA adapter
+  → owns HTTP/network retry loop
+  → forwards signal to fetch
+  → aborts retry backoff
+  → does not retry after cancellation
+  → has no AbortSignal.timeout / portable deadline
+```
+
+### Deterministic characterization added
+
+Create:
+
+```text
+src/test-h0-004b-provider-reliability-characterization.ts
+```
+
+The test uses only fake providers, mocked NVIDIA `fetch`, and source inspection.
+
+It proves:
+
+```text
+1. executeStructuredLlm creates no whole-call deadline
+2. cooperative AbortSignal crosses the portable execution boundary unchanged
+3. NVIDIA forwards that signal to the real transport boundary
+4. NVIDIA transport retry remains adapter-owned
+5. transportRetries=6 does not cause another attempt while the current fetch is pending
+6. a pending fetch remains pending until transport completion/failure/cancellation
+7. cancelling that fetch prevents retry progression
+8. provider/runtime exceptions propagate unchanged through portable execution
+9. provider execution/NVIDIA transport contains no benchmark expectedOutcome dependency
+10. no B01-B05 execution or real provider usage is required
+```
+
+The existing H0-002A application-boundary regression remains part of the focused
+gate so provider/runtime propagation is not characterized in isolation from the
+shared `runHarness(...)` path.
+
+### Files
+
+Create:
+
+```text
+src/test-h0-004b-provider-reliability-characterization.ts
+```
+
+Modify:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+No production source is modified.
+
+### Focused deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004b-provider-reliability-characterization && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-characterization && \
+npm run test:h0-002a-run-harness
+```
+
+No real NVIDIA or Claude request is allowed.
+
+### Acceptance state
+
+Do not mark Step 1 accepted until the focused gate passes in the development
+environment.
+
+If accepted, commit the characterization before authorizing the isolated live
+provider probe from H0-004B Step 2.
+
+## H0-004B Step 1 Validation Record
+
+**Status:** ✅ Accepted
+
+The focused deterministic gate passed in the development environment:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004b-provider-reliability-characterization && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-characterization && \
+npm run test:h0-002a-run-harness
+```
+
+Accepted characterization:
+
+```text
+executeStructuredLlm
+  → creates no whole-call timeout/deadline
+  → creates no Harness whole-call retry
+  → forwards cooperative AbortSignal unchanged
+  → propagates provider/runtime errors
+
+StructuredLlmRequest.signal
+  → reaches NVIDIA fetch
+
+NVIDIA transport retries
+  → remain adapter-owned
+  → transportRetries is a retry-count hint, not a wall-clock deadline
+  → no next retry begins while the current fetch remains pending
+  → cancellation stops retry progression
+
+benchmark expectedOutcome
+  → does not participate in provider execution/reliability policy
+```
+
+The test consumed zero real provider usage and did not execute B01-B05.
+
+### Step 1 conclusion
+
+H0-004B Step 1 confirms the live H0-004A stall was compatible with the current
+runtime contract rather than contradicting it:
+
+```text
+a transport attempt may remain pending for an unbounded wall-clock duration
+until the underlying transport resolves, rejects, or receives cancellation
+```
+
+The existing retry count does not bound that duration.
+
+No production behavior changed in Step 1.
+
+**Decision:** proceed to H0-004B Step 2 — Isolated Live Provider Probe.
+
+Before any B01-B05 rerun or timeout implementation, compare the same small
+provider scenario across:
+
+```text
+A: NVIDIA / openai/gpt-oss-20b
+B: NVIDIA / nvidia/nemotron-3.5-lightning-30b-a3b
+```
+
+The probe must remain separate from the benchmark suite and must record live
+latency/error evidence rather than model quality.
+

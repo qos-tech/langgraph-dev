@@ -71,6 +71,7 @@
     "benchmark:materialize-fixtures": "tsx scripts/materialize-benchmark-fixtures.ts",
     "benchmark:h0-004-baseline": "node --env-file=.env --import tsx scripts/run-h0-004-baseline.ts",
     "test:h0-004a-remeasurement-boundary": "tsx src/test-h0-004a-remeasurement-boundary.ts",
+    "test:h0-004b-provider-reliability-characterization": "tsx src/test-h0-004b-provider-reliability-characterization.ts",
     "benchmark:h0-004a-remeasurement": "node --env-file=.env --import tsx scripts/run-h0-004a-remeasurement.ts"
   },
   "keywords": [],
