@@ -13,7 +13,7 @@ export type BenchmarkComparisonRecord = Readonly<{
   benchmarkId: string;
   difficulty: BenchmarkDifficulty;
   expectedOutcome: BenchmarkExpectedOutcome;
-  observedOutcome: BenchmarkExpectedOutcome;
+  observedOutcome: BenchmarkExpectedOutcome | null;
   accepted: boolean;
   acceptanceFailures: readonly BenchmarkAcceptanceFailure[];
   validationPassed: boolean;
@@ -29,6 +29,16 @@ export type BenchmarkComparisonRecord = Readonly<{
   cost: null;
   terminalFailureReason: string | null;
 }>;
+
+function terminalFailureReason(
+  result: CompleteBenchmarkRunnerResult,
+): string | null {
+  if (result.observation.terminal?.kind === "planning_exhausted") {
+    return "planning_exhausted";
+  }
+
+  return result.harness.state.failureReason ?? null;
+}
 
 function sumCompleteUsage(
   calls: readonly LlmCallTelemetry[],
@@ -80,6 +90,6 @@ export function createBenchmarkComparisonRecord(
     completionTokens: sumCompleteUsage(llmCalls, "completionTokens"),
     totalTokens: sumCompleteUsage(llmCalls, "totalTokens"),
     cost: null,
-    terminalFailureReason: result.harness.state.failureReason ?? null,
+    terminalFailureReason: terminalFailureReason(result),
   };
 }

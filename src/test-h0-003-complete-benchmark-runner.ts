@@ -79,6 +79,9 @@ function harnessResult(
       status: outcome === "blocked" ? "failed" : "completed",
       failureReason:
         outcome === "blocked" ? "missing external evidence" : undefined,
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
     },
     telemetry: {
       marker: "telemetry-preserved",
@@ -193,6 +196,15 @@ assert.equal(result.harness, successfulHarness);
 assert.equal(result.validation, successfulValidation);
 assert.deepEqual(result.observation, {
   finalOutcome: "changes_required",
+  terminal: {
+    kind: "completed_with_plan",
+    status: "completed",
+    failureReason: null,
+    planningAttempts: 1,
+    maxPlanningAttempts: 4,
+    reviewAttempts: 1,
+    refinedPlanOutcome: "changes_required",
+  },
   filesChanged: ["src/example.ts"],
   validationPassed: true,
   humanInterventionRequired: false,

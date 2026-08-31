@@ -5,15 +5,23 @@ async function source(path: string): Promise<string> {
   return readFile(new URL(path, import.meta.url), "utf8");
 }
 
-const [state, routers, nodes, runHarness, observation, execution] =
-  await Promise.all([
-    source("./state.ts"),
-    source("./graph/routers.ts"),
-    source("./graph/nodes.ts"),
-    source("./app/run-harness.ts"),
-    source("./benchmarks/observation.ts"),
-    source("./providers/execution.ts"),
-  ]);
+const [
+  state,
+  routers,
+  nodes,
+  runHarness,
+  observation,
+  terminalEvidence,
+  execution,
+] = await Promise.all([
+  source("./state.ts"),
+  source("./graph/routers.ts"),
+  source("./graph/nodes.ts"),
+  source("./app/run-harness.ts"),
+  source("./benchmarks/observation.ts"),
+  source("./benchmarks/terminal-evidence.ts"),
+  source("./providers/execution.ts"),
+]);
 
 /**
  * H0-004A / Step 1
@@ -81,23 +89,29 @@ assert.match(
   /if\s*\(state\.failureReason\)\s*\{[\s\S]*?return\s+["']failed["']/,
 );
 
-// Existing observation semantics remain frozen during characterization.
+// Step 3 intentionally moved terminal-state interpretation out of observation.ts.
+// Keep Step 1's deterministic characterization invariant at the new boundary:
+// planning exhaustion is derived only from returned Harness state evidence.
 assert.match(
-  observation,
-  /if\s*\(!refinedPlan\)\s*\{[\s\S]*?Cannot derive benchmark outcome without refinedPlan\./,
+  terminalEvidence,
+  /if\s*\(!refinedPlan\)\s*\{[\s\S]*?state\.status\s*===\s*["']failed["'][\s\S]*?state\.planningAttempts\s*>=\s*state\.maxPlanningAttempts[\s\S]*?kind:\s*["']planning_exhausted["'][\s\S]*?refinedPlanOutcome:\s*null/,
 );
 assert.match(
-  observation,
+  terminalEvidence,
   /refinedPlan\.outcome\s*===\s*["']blocked["'][\s\S]*?state\.status\s*!==\s*["']failed["'][\s\S]*?!state\.failureReason/,
 );
 assert.match(
+  terminalEvidence,
+  /refinedPlan\.outcome\s*===\s*["']changes_required["'][\s\S]*?refinedPlan\.outcome\s*===\s*["']already_satisfied["'][\s\S]*?state\.status\s*!==\s*["']completed["']\s*\|\|\s*state\.failureReason\s*!==\s*undefined/,
+);
+assert.match(
   observation,
-  /state\.status\s*!==\s*["']completed["']\s*\|\|\s*state\.failureReason\s*!==\s*undefined/,
+  /terminal\.kind\s*===\s*["']planning_exhausted["'][\s\S]*?return\s+null/,
 );
 assert.doesNotMatch(
-  observation,
+  observation + terminalEvidence,
   /telemetry\.finalStatus|benchmarkId|expectedOutcome/,
-  "observation must not infer outcome from telemetry status or benchmark expectations",
+  "terminal classification must not infer outcome from telemetry status or benchmark expectations",
 );
 
 // Provider/runtime errors currently propagate rather than becoming a returned

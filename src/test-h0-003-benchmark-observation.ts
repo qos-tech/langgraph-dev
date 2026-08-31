@@ -46,6 +46,9 @@ function harnessResult(
             },
       status,
       failureReason,
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
     },
   } as unknown as HarnessRunResult;
 }
@@ -59,6 +62,15 @@ assert.deepEqual(
   }),
   {
     finalOutcome: "changes_required",
+    terminal: {
+      kind: "completed_with_plan",
+      status: "completed",
+      failureReason: null,
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
+      refinedPlanOutcome: "changes_required",
+    },
     filesChanged: ["src/example.ts"],
     validationPassed: true,
     humanInterventionRequired: false,
@@ -74,6 +86,15 @@ assert.deepEqual(
   }),
   {
     finalOutcome: "already_satisfied",
+    terminal: {
+      kind: "completed_with_plan",
+      status: "completed",
+      failureReason: null,
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
+      refinedPlanOutcome: "already_satisfied",
+    },
     filesChanged: [],
     validationPassed: true,
     humanInterventionRequired: false,
@@ -93,6 +114,15 @@ assert.deepEqual(
   }),
   {
     finalOutcome: "blocked",
+    terminal: {
+      kind: "blocked_with_plan",
+      status: "failed",
+      failureReason: "missing external evidence",
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
+      refinedPlanOutcome: "blocked",
+    },
     filesChanged: [],
     validationPassed: true,
     humanInterventionRequired: false,
@@ -121,11 +151,48 @@ assert.deepEqual(
   }),
   {
     finalOutcome: "changes_required",
+    terminal: {
+      kind: "completed_with_plan",
+      status: "completed",
+      failureReason: null,
+      planningAttempts: 1,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
+      refinedPlanOutcome: "changes_required",
+    },
     filesChanged: ["src/example.ts"],
     validationPassed: false,
     humanInterventionRequired: true,
   },
   "validation and intervention evidence must pass through without semantic inference",
+);
+
+const planningExhausted = harnessResult(undefined, "failed");
+(planningExhausted.state as any).planningAttempts = 4;
+(planningExhausted.state as any).maxPlanningAttempts = 4;
+
+assert.deepEqual(
+  deriveBenchmarkRunObservation({
+    harnessResult: planningExhausted,
+    filesChanged: [],
+    validation: validationPassed,
+    humanInterventionRequired: false,
+  }),
+  {
+    finalOutcome: null,
+    terminal: {
+      kind: "planning_exhausted",
+      status: "failed",
+      failureReason: null,
+      planningAttempts: 4,
+      maxPlanningAttempts: 4,
+      reviewAttempts: 1,
+      refinedPlanOutcome: null,
+    },
+    filesChanged: [],
+    validationPassed: true,
+    humanInterventionRequired: false,
+  },
 );
 
 for (const invalid of [

@@ -1,6 +1,11 @@
 import type { HarnessRunResult } from "../app/run-harness.js";
 import type { BenchmarkRunObservation } from "./acceptance.js";
 import type { BenchmarkExpectedOutcome } from "./contracts.js";
+import {
+  deriveHarnessTerminalEvidence,
+  HarnessTerminalEvidenceDerivationError,
+  type HarnessTerminalEvidence,
+} from "./terminal-evidence.js";
 import type { BenchmarkValidationResult } from "./validation.js";
 
 export type BenchmarkObservationEvidence = Readonly<{
@@ -18,50 +23,33 @@ export class BenchmarkObservationDerivationError extends Error {
 }
 
 function deriveFinalOutcome(
-  harnessResult: HarnessRunResult,
-): BenchmarkExpectedOutcome {
-  const state = harnessResult.state;
-  const refinedPlan = state.refinedPlan;
-
-  if (!refinedPlan) {
-    throw new BenchmarkObservationDerivationError(
-      "Cannot derive benchmark outcome without refinedPlan.",
-    );
+  terminal: HarnessTerminalEvidence,
+): BenchmarkExpectedOutcome | null {
+  if (terminal.kind === "planning_exhausted") {
+    return null;
   }
 
-  if (refinedPlan.outcome === "blocked") {
-    if (state.status !== "failed" || !state.failureReason) {
-      throw new BenchmarkObservationDerivationError(
-        "Blocked benchmark outcome requires failed terminal state with failureReason.",
-      );
-    }
-
-    return "blocked";
-  }
-
-  if (
-    refinedPlan.outcome === "already_satisfied" ||
-    refinedPlan.outcome === "changes_required"
-  ) {
-    if (state.status !== "completed" || state.failureReason !== undefined) {
-      throw new BenchmarkObservationDerivationError(
-        `${refinedPlan.outcome} benchmark outcome requires completed terminal state without failureReason.`,
-      );
-    }
-
-    return refinedPlan.outcome;
-  }
-
-  throw new BenchmarkObservationDerivationError(
-    "Unsupported refined-plan benchmark outcome.",
-  );
+  return terminal.refinedPlanOutcome;
 }
 
 export function deriveBenchmarkRunObservation(
   evidence: BenchmarkObservationEvidence,
 ): BenchmarkRunObservation {
+  let terminal: HarnessTerminalEvidence;
+
+  try {
+    terminal = deriveHarnessTerminalEvidence(evidence.harnessResult);
+  } catch (error) {
+    if (error instanceof HarnessTerminalEvidenceDerivationError) {
+      throw new BenchmarkObservationDerivationError(error.message);
+    }
+
+    throw error;
+  }
+
   return {
-    finalOutcome: deriveFinalOutcome(evidence.harnessResult),
+    finalOutcome: deriveFinalOutcome(terminal),
+    terminal,
     filesChanged: [...evidence.filesChanged],
     validationPassed: evidence.validation.passed,
     humanInterventionRequired: evidence.humanInterventionRequired,

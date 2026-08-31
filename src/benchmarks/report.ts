@@ -69,7 +69,7 @@ function renderTaskRow(task: BenchmarkSuiteTaskResult): string {
     task.benchmarkId,
     task.status,
     comparison.expectedOutcome,
-    comparison.observedOutcome,
+    comparison.observedOutcome ?? "n/a",
     String(comparison.accepted),
     String(comparison.validationPassed),
     String(comparison.humanInterventionRequired),

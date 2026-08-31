@@ -23816,3 +23816,235 @@ nullable-domain-outcome contract that is consistent with Step 1 characterization
 
 Only after Step 2 acceptance may H0-004A Step 3 implement the contract.
 
+## H0-004A Step 3 — Implement Terminal Evidence Contract
+
+**Status:** 🧪 Implemented — focused gate pending
+
+### Implementation
+
+Implemented the Step 2 contract with a narrow benchmark-owned terminal evidence
+module:
+
+```text
+src/benchmarks/terminal-evidence.ts
+```
+
+Supported returned Harness terminal kinds are exactly:
+
+```text
+completed_with_plan
+blocked_with_plan
+planning_exhausted
+```
+
+No `provider_failed` returned state was added because Step 1 proved provider/runtime
+exceptions currently propagate before `HarnessRunResult` exists.
+
+### Observation behavior
+
+`deriveBenchmarkRunObservation(...)` now derives terminal evidence first.
+
+Mappings:
+
+```text
+completed_with_plan
+  → finalOutcome = changes_required | already_satisfied
+
+blocked_with_plan
+  → finalOutcome = blocked
+
+planning_exhausted
+  → finalOutcome = null
+```
+
+Planning exhaustion requires:
+
+```text
+refinedPlan absent
+state.status = failed
+planningAttempts >= maxPlanningAttempts
+```
+
+Refined-plan absence below the exhaustion boundary remains a deterministic
+derivation error.
+
+Malformed plan/status combinations remain derivation errors.
+
+### Acceptance behavior
+
+`BenchmarkRunObservation.finalOutcome` now permits `null` for a measured Harness
+terminal that has no benchmark-domain outcome.
+
+A null domain outcome is rejected with the stable acceptance failure:
+
+```text
+terminal_outcome_unavailable
+```
+
+It is not converted into `unexpected_outcome` and is never inferred as `blocked`.
+
+### Comparison/report behavior
+
+`BenchmarkComparisonRecord.observedOutcome` now permits `null`.
+
+For planning exhaustion:
+
+```text
+observedOutcome = null
+accepted = false
+terminalFailureReason = planning_exhausted
+```
+
+Markdown renders a null observed outcome as:
+
+```text
+n/a
+```
+
+Aggregation algorithms do not change. A planning-exhausted task that reaches the
+comparison boundary remains a completed/rejected task and naturally does not count
+as an outcome match.
+
+### Compatibility
+
+The optional terminal-evidence field on manually constructed
+`BenchmarkRunObservation` values preserves compatibility for existing deterministic
+fixtures while all observations produced by `deriveBenchmarkRunObservation(...)`
+include terminal evidence.
+
+Provider/runtime exception propagation is unchanged.
+
+Workspace, fixture, database, process-launch, persistence, and other measurement
+infrastructure exceptions remain suite `infrastructure_failed` behavior.
+
+No benchmark definitions, fixture revisions, prompts, providers, models, planning
+limits, validation commands, or historical baseline artifacts changed.
+
+### Focused deterministic gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004a-terminal-evidence && \
+npm run test:h0-004a-terminal-state-characterization && \
+npm run test:h0-003-benchmark-observation && \
+npm run test:h0-003-complete-benchmark-runner && \
+npm run test:benchmark-acceptance && \
+npm run test:h0-004-comparison-contract && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-comparison-report
+```
+
+No live provider or B01-B05 measurement is part of this gate.
+
+After the focused gate passes, run the complete H0 regression gate before Step 3
+acceptance and commit.
+
+### H0-004A Step 3 acceptance record
+
+**Status:** ✅ Accepted
+
+Focused deterministic gate:
+
+```text
+PASS
+```
+
+Full regression gate:
+
+```text
+PASS
+exit code = 0
+```
+
+Accepted implementation behavior:
+
+```text
+completed_with_plan
+  → finalOutcome = changes_required | already_satisfied
+
+blocked_with_plan
+  → finalOutcome = blocked
+
+planning_exhausted
+  → finalOutcome = null
+  → measured benchmark result
+  → accepted = false
+  → acceptance failure = terminal_outcome_unavailable
+  → comparison observedOutcome = null
+  → comparison terminalFailureReason = planning_exhausted
+  → not normalized as infrastructure_failed
+```
+
+Accepted terminal-classification invariants:
+
+```text
+planning_exhausted requires:
+  refinedPlan absent
+  state.status = failed
+  planningAttempts >= maxPlanningAttempts
+
+refinedPlan absence before exhaustion
+  → derivation error
+
+invalid refinedPlan/status combinations
+  → derivation error
+
+expected benchmark outcome
+  → does not participate in terminal classification
+
+telemetry.finalStatus
+  → does not determine benchmark domain outcome
+```
+
+Provider/runtime exception behavior remains unchanged:
+
+```text
+provider/runtime exception
+  → propagates through runHarness
+  → no HarnessRunResult
+  → no fabricated provider_failed terminal evidence
+```
+
+The Step 1 characterization test was updated only to follow the new terminal-evidence
+boundary. Its behavioral invariants remain unchanged.
+
+No benchmark definitions, fixture revisions, prompts, providers, models, planning
+limits, or historical baseline artifacts changed.
+
+### Step 3 conclusion
+
+The H0-004A observation boundary can now represent planning exhaustion as a valid
+measured terminal state without inventing a benchmark-domain outcome.
+
+This removes the specific measurement defect observed in the canonical H0-004
+baseline while preserving the distinction between:
+
+```text
+measured Harness terminal rejection
+propagated Harness/provider/runtime exception
+benchmark infrastructure failure
+```
+
+Proceed to:
+
+```text
+H0-004A Step 4 — Controlled Re-measurement
+```
+
+The fixed B01-B05 suite must remain unchanged.
+
+Before the next live run:
+
+```text
+1. commit this accepted implementation
+2. ensure working tree is clean
+3. record the exact implementation SHA
+4. define a new versioned H0-004A measurement artifact path
+5. do not overwrite the canonical H0-004 baseline
+6. execute the fixed real suite exactly once
+7. review the new result before GO/PIVOT/STOP
+```
+
+H1/H2 remain blocked until that new measurement is reviewed.
+
