@@ -24048,3 +24048,406 @@ Before the next live run:
 
 H1/H2 remain blocked until that new measurement is reviewed.
 
+## H0-004A Step 4 — Controlled Re-measurement Boundary
+
+**Status:** 📋 Specification / decision
+
+### Objective
+
+Create the smallest explicit measurement-output boundary required to capture the
+post-pivot H0-004A evidence without weakening the existing clean-repository
+preflight and without moving, renaming, overwriting, or temporarily hiding the
+canonical H0-004 baseline.
+
+This step is measurement-infrastructure work only.
+
+It must not execute B01-B05 yet.
+
+### Evidence motivating this step
+
+The accepted real-suite boundary currently derives the canonical artifact path
+internally:
+
+```text
+Harness repository
+  → .benchmark-results/h0-004
+  → baseline.json
+  → baseline.md
+```
+
+The same preflight also requires the Harness repository to be clean before the
+suite may execute.
+
+Therefore a wrapper that mutates `.benchmark-results` before preflight is
+structurally invalid: it causes the clean-repository guard to reject the run.
+
+The correct boundary is to make artifact destination explicit while preserving
+all existing defaults.
+
+### Architectural decision
+
+Extend only the outer default baseline options with an optional explicit artifact
+directory:
+
+```ts
+export type DefaultH0BaselineOptions = Readonly<{
+  harnessRepositoryPath?: string;
+  env?: ProcessEnvironment;
+  artifactDirectory?: string;
+}>;
+```
+
+Resolution semantics:
+
+```text
+options.artifactDirectory provided
+  → resolve that explicit path
+  → use it as BenchmarkBaselinePreflightEvidence.artifactDirectory
+
+options.artifactDirectory absent
+  → preserve current default exactly
+  → <harnessRepositoryPath>/.benchmark-results/h0-004
+```
+
+The canonical H0-004 command therefore remains behaviorally unchanged.
+
+### H0-004A measurement destination
+
+The real H0-004A measurement must write outside the Harness working tree.
+
+Required destination shape:
+
+```text
+~/.cache/qos-harness/measurements/h0-004a/<implementation-sha>/
+  baseline.json
+  baseline.md
+```
+
+The directory name is the exact committed Harness implementation SHA being
+measured.
+
+No H0-004A live evidence may be written inside the repository before or during
+preflight.
+
+### Canonical baseline immutability
+
+The existing historical artifacts remain immutable:
+
+```text
+.benchmark-results/h0-004/baseline.json
+.benchmark-results/h0-004/baseline.md
+```
+
+Step 4 must not:
+
+```text
+move them
+rename them
+delete them
+temporarily hide them
+rewrite them
+copy a new run over them
+relax their existing rerun guard
+```
+
+The canonical `benchmark:h0-004-baseline` command must continue refusing an
+implicit rerun when those artifacts already exist.
+
+### Explicit H0-004A command
+
+Introduce a dedicated script/command for the post-pivot measurement, for example:
+
+```text
+scripts/run-h0-004a-remeasurement.ts
+benchmark:h0-004a-remeasurement
+```
+
+The script must:
+
+```text
+1. resolve the current Harness repository path
+2. require a clean working tree through the existing real-suite preflight
+3. obtain the exact current HEAD SHA
+4. derive the external artifact directory from that SHA
+5. require the target artifact directory to contain no existing baseline artifact
+6. invoke runDefaultH0BaselineCapture(...) exactly once
+7. pass only the explicit external artifactDirectory override
+8. verify the returned capture harness.gitRevision equals the SHA used in the path
+9. print artifact paths and summary only after successful capture
+```
+
+The script must not:
+
+```text
+mutate Git state
+create measurement files inside the Harness repository
+delete previous H0-004A evidence
+retry the suite
+loop over benchmark execution
+change benchmark selection/order
+change runtime composition
+```
+
+### Artifact-existence semantics
+
+The existing `assertBaselineArtifactsAbsent(...)` guard remains the persistence
+safety boundary.
+
+For the H0-004A external directory:
+
+```text
+baseline.json exists
+OR
+baseline.md exists
+  → preflight fails
+  → live suite must not execute
+```
+
+This makes an already-captured implementation SHA non-rerunnable through the
+dedicated command.
+
+The implementation must not silently choose another directory, timestamp, or
+suffix after such a failure.
+
+### Exact measurement identity
+
+The H0-004A artifact path and captured evidence must agree:
+
+```text
+artifact directory SHA
+  =
+capture.harness.gitRevision
+  =
+git rev-parse HEAD at accepted implementation commit
+```
+
+A mismatch is a measurement-integrity failure.
+
+Package version remains captured through the existing real-suite behavior.
+
+### Fixed-suite invariants
+
+Step 4 does not modify:
+
+```text
+B01
+B02
+B03
+B04
+B05
+```
+
+It does not modify:
+
+```text
+benchmark IDs
+benchmark revisions
+expected outcomes
+historical source revisions
+fixture materialization
+workspace isolation
+PostgreSQL isolation
+validation commands
+suite ordering
+suite retry semantics
+comparison semantics
+aggregation semantics
+terminal-evidence semantics
+```
+
+The existing `assertFixedSuiteResult(...)` remains authoritative.
+
+### Runtime invariants
+
+Do not change:
+
+```text
+providers
+provider selection
+models
+prompts
+planning-attempt limits
+review-attempt behavior
+token/provider hints
+runtime composition
+telemetry contracts
+```
+
+The post-pivot run must measure only the accepted H0-004A observability change
+plus this narrow artifact-destination boundary.
+
+### Deterministic implementation scope
+
+Expected production change:
+
+```text
+src/benchmarks/real-suite.ts
+```
+
+Expected new adapter:
+
+```text
+scripts/run-h0-004a-remeasurement.ts
+```
+
+Expected deterministic test:
+
+```text
+src/test-h0-004a-remeasurement-boundary.ts
+```
+
+Expected metadata changes:
+
+```text
+package.json
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Do not modify unrelated benchmark, provider, graph, fixture, validation, telemetry,
+or acceptance modules unless a deterministic test exposes a concrete pre-existing
+contract defect.
+
+### Deterministic test requirements
+
+The Step 4 focused test must use injected/fake dependencies where necessary and
+must execute zero real provider calls and zero real B01-B05 suite runs.
+
+It must prove at least:
+
+```text
+1. default options still resolve to .benchmark-results/h0-004
+2. explicit artifactDirectory overrides only the artifact destination
+3. explicit relative/absolute path resolution is deterministic
+4. clean-repository preflight remains required
+5. canonical baseline rerun protection remains unchanged
+6. external H0-004A target with existing baseline.json is rejected
+7. external H0-004A target with existing baseline.md is rejected
+8. no benchmark definition/order changes are introduced
+9. no provider/model/runtime configuration changes are introduced
+10. the dedicated remeasurement script performs no hidden retry/loop
+11. the dedicated command is distinct from benchmark:h0-004-baseline
+12. no real provider usage is consumed
+```
+
+### Focused deterministic gate
+
+After implementation:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004a-remeasurement-boundary && \
+npm run test:h0-004-real-suite && \
+npm run test:h0-004a-terminal-evidence && \
+npm run test:h0-004a-terminal-state-characterization && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner && \
+npm run test:h0-004-comparison-contract
+```
+
+No live provider or B01-B05 measurement is part of this gate.
+
+### Full regression requirement
+
+Step 4 is not accepted from the focused gate alone.
+
+Required sequence:
+
+```text
+spec/decision
+→ implementation
+→ focused deterministic gate
+→ PLAN implementation/acceptance metadata
+→ full H0 regression gate
+→ one self-contained implementation commit
+→ confirm clean working tree
+→ freeze exact implementation SHA
+→ execute benchmark:h0-004a-remeasurement exactly once
+→ persist resulting evidence separately
+→ review GO / PIVOT / STOP
+```
+
+### Live-run authorization boundary
+
+The real post-pivot measurement is explicitly forbidden until the Step 4
+implementation commit exists and the working tree is clean.
+
+The earlier aborted attempts are preflight failures only and are not benchmark
+measurements because the fixed suite never began execution.
+
+After the Step 4 implementation is committed:
+
+```text
+one implementation SHA
+→ one external H0-004A artifact directory
+→ one authorized real B01-B05 execution
+```
+
+If that run produces poor benchmark results, it is still valid evidence and must
+not be rerun merely to improve the score.
+
+### Primary post-pivot review target
+
+The first review question remains:
+
+```text
+Do valid returned Harness terminal states for B04/B05 stop being counted as
+benchmark infrastructure failures?
+```
+
+The target is not:
+
+```text
+SFCR = 100%
+```
+
+Planning exhaustion may remain a measured rejected benchmark result.
+
+A genuine provider/runtime/infrastructure exception may still remain
+`infrastructure_failed` when supported by actual evidence.
+
+### Non-goals
+
+Step 4 does not:
+
+```text
+change H0-004A terminal classification
+change acceptance thresholds
+change benchmark expected outcomes
+reinterpret planning_exhausted as blocked
+catch/normalize provider exceptions
+change B01-B05
+change fixtures/source revisions
+change providers/models/prompts
+change planning budgets
+change validation
+change aggregation formulas
+change comparison scoring
+introduce H1 Repository Intelligence
+introduce H2 Context Engine
+make GO/PIVOT/STOP automatically
+execute the real post-pivot measurement during implementation
+```
+
+### Exit condition
+
+Step 4 implementation is accepted when:
+
+```text
+external artifact destination is explicit and deterministic
+canonical H0-004 behavior remains unchanged
+canonical H0-004 artifacts remain immutable
+clean-repository preflight remains intact
+same fixed B01-B05 suite remains intact
+focused gate passes
+full H0 regression gate passes
+implementation is committed in one self-contained commit
+working tree is clean
+exact implementation SHA is frozen
+```
+
+Only then may the dedicated H0-004A command be executed exactly once.
+
+H1/H2 remain blocked until the resulting post-pivot evidence is reviewed and a
+new GO / PIVOT / STOP decision is recorded.
+
