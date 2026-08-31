@@ -497,7 +497,18 @@ async function captureDefaultRuntime(
 export type DefaultH0BaselineOptions = Readonly<{
   harnessRepositoryPath?: string;
   env?: ProcessEnvironment;
+  artifactDirectory?: string;
 }>;
+
+export function resolveH0BaselineArtifactDirectory(
+  options: DefaultH0BaselineOptions,
+  harnessRepositoryPath: string,
+): string {
+  return resolve(
+    options.artifactDirectory ??
+      join(harnessRepositoryPath, H0_004_BASELINE_DIRECTORY),
+  );
+}
 
 export async function createDefaultH0BaselineDependencies(
   options: DefaultH0BaselineOptions = {},
@@ -519,9 +530,9 @@ export async function createDefaultH0BaselineDependencies(
     env,
     "QOS_BENCHMARK_POSTGRES_ADMIN_URL",
   );
-  const artifactDirectory = join(
+  const artifactDirectory = resolveH0BaselineArtifactDirectory(
+    options,
     harnessRepositoryPath,
-    H0_004_BASELINE_DIRECTORY,
   );
 
   let preflightEvidence: BenchmarkBaselinePreflightEvidence | undefined;

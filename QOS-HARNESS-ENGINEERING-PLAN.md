@@ -24451,3 +24451,65 @@ Only then may the dedicated H0-004A command be executed exactly once.
 H1/H2 remain blocked until the resulting post-pivot evidence is reviewed and a
 new GO / PIVOT / STOP decision is recorded.
 
+### H0-004A Step 4 implementation record
+
+**Status:** 🧪 Implemented — focused gate pending
+
+Implemented the controlled remeasurement boundary without executing the real
+B01-B05 suite.
+
+Production boundary change:
+
+```text
+DefaultH0BaselineOptions.artifactDirectory?
+  → optional explicit artifact destination
+
+absent
+  → existing canonical default remains:
+    <harnessRepositoryPath>/.benchmark-results/h0-004
+
+present
+  → resolve the explicit destination
+  → preserve all existing preflight, suite, persistence, and fixed-suite behavior
+```
+
+Dedicated live adapter:
+
+```text
+scripts/run-h0-004a-remeasurement.ts
+```
+
+The adapter derives:
+
+```text
+current committed Harness HEAD
+  ↓
+~/.cache/qos-harness/measurements/h0-004a/<HEAD>
+```
+
+and passes that destination to the existing default real-suite capture boundary.
+
+The canonical H0-004 command remains unchanged.
+
+Deterministic guard:
+
+```text
+src/test-h0-004a-remeasurement-boundary.ts
+```
+
+The focused test characterizes default-path preservation, explicit path
+resolution, existing clean-tree/artifact guards, dedicated command wiring,
+measurement identity verification, and absence of hidden retry/loop behavior.
+
+No provider, model, prompt, benchmark case, fixture revision, acceptance,
+terminal-evidence, aggregation, validation, or planning-budget behavior is
+changed.
+
+No live provider call or B01-B05 measurement has been executed by this
+implementation step.
+
+Proceed only with the deterministic focused gate defined above. Do not run
+`benchmark:h0-004a-remeasurement` until Step 4 passes the full regression gate,
+the implementation is committed, the worktree is clean, and the exact new
+implementation SHA is frozen.
+
