@@ -22567,3 +22567,641 @@ That decision must use the canonical evidence above, including the two
 
 Do not begin H1/H2 before that checkpoint is explicitly completed.
 
+# H0-004 Viability Checkpoint
+
+**Decision:** 🔄 PIVOT
+
+The first valid fixed-suite baseline is complete and versioned.
+
+Canonical evidence:
+
+```text
+selectedTaskCount = 5
+completedTaskCount = 3
+infrastructureFailureCount = 2
+acceptedTaskCount = 3
+SFCR = 60.00%
+outcomeCorrectnessRate = 60.00%
+validationSuccessRate = 60.00%
+humanInterventionRate = 0.00%
+totalHarnessDurationMs = 128479
+totalLlmCallCount = 16
+totalTokens = 17294
+cost = null
+```
+
+Task-level result:
+
+```text
+B01 completed / accepted
+B02 completed / accepted
+B03 completed / accepted
+B04 infrastructure_failed
+B05 infrastructure_failed
+```
+
+B04 and B05 both surfaced:
+
+```text
+BenchmarkObservationDerivationError:
+Cannot derive benchmark outcome without refinedPlan.
+```
+
+The checkpoint decision is:
+
+```text
+GO:    no
+STOP:  no
+PIVOT: yes
+```
+
+### Why this is not GO
+
+The Harness has demonstrated autonomous viability on B01-B03 with zero recorded
+human intervention, but the current benchmark observation boundary cannot
+represent terminal planning states when no `refinedPlan` exists.
+
+The two most complex fixed cases therefore collapse into benchmark
+infrastructure failures instead of auditable benchmark outcomes.
+
+Advancing directly to H1/H2 would mix new capability work with an unresolved
+measurement/terminal-state semantic defect.
+
+### Why this is not STOP
+
+The baseline does not show a generally non-viable Harness:
+
+```text
+B01-B03 = 3/3 accepted
+humanInterventionRate = 0%
+```
+
+The failure mode is narrow, reproducible, and located at the terminal
+outcome/evidence boundary.
+
+### Pivot target
+
+Proceed to:
+
+```text
+H0-004A — Terminal Outcome Observability
+```
+
+Do not change providers, models, prompts, fixed benchmark definitions, fixture
+revisions, acceptance thresholds, or validation semantics merely to improve the
+60% baseline.
+
+H1/H2 remain blocked until H0-004A is implemented and the same fixed suite is
+measured again as a new explicit baseline.
+
+# H0-004A — Terminal Outcome Observability
+
+**Status:** 📋 Specification / decision
+
+## Objective
+
+Make every supported Harness terminal state deterministically observable by the
+benchmark runner even when `state.refinedPlan` is absent.
+
+The purpose is not to make B04/B05 pass.
+
+The purpose is to preserve terminal evidence so that benchmark acceptance can
+decide whether the observed Harness result matches the benchmark expectation.
+
+The target boundary is:
+
+```text
+Harness terminal state/evidence
+        ↓
+deterministic terminal classification
+        ↓
+benchmark observation
+        ↓
+existing acceptance semantics
+```
+
+The observation layer must no longer require a successful `refinedPlan` merely
+to explain how the Harness terminated.
+
+## Baseline defect exposed by H0-004
+
+The accepted H0-003 observation rule intentionally defined:
+
+```text
+if refinedPlan is absent
+  → observation cannot be derived
+```
+
+That rule was safe for the execution evidence understood at the time, but the
+real H0-004 baseline exposed a missing terminal-state contract.
+
+B04 and B05 reached Harness execution and exhausted the planning lifecycle
+without a usable `refinedPlan`.
+
+The benchmark layer then threw:
+
+```text
+BenchmarkObservationDerivationError
+```
+
+and the suite normalized both results as:
+
+```text
+infrastructure_failed
+```
+
+This loses the distinction between:
+
+```text
+measurement infrastructure failed
+```
+
+and:
+
+```text
+Harness completed its allowed lifecycle but did not produce an executable or
+accepted planning result
+```
+
+H0-004A corrects only that semantic gap.
+
+## Architectural decision
+
+Introduce a deterministic terminal-classification contract before benchmark
+outcome derivation.
+
+Preferred conceptual contract:
+
+```ts
+type HarnessTerminalKind =
+  | "completed_with_plan"
+  | "blocked_with_plan"
+  | "planning_exhausted"
+  | "execution_failed"
+  | "validation_failed"
+  | "provider_failed"
+  | "infrastructure_failed";
+
+type HarnessTerminalEvidence = Readonly<{
+  kind: HarnessTerminalKind;
+  status: DevStateType["status"];
+  failureReason: string | null;
+  planningAttempts: number;
+  maxPlanningAttempts: number;
+  reviewAttempts: number;
+  refinedPlanOutcome: BenchmarkExpectedOutcome | null;
+}>;
+```
+
+Exact names may be refined from current source contracts, but the semantic
+categories are frozen by this specification.
+
+Do not add terminal categories merely because a single benchmark would become
+easier to score.
+
+## Source-of-truth rule
+
+Terminal classification must use deterministic runtime evidence already exposed
+by the Harness state/lifecycle.
+
+Preferred sources include:
+
+```text
+state.status
+state.failureReason
+state.planningAttempts
+state.maxPlanningAttempts
+state.reviewAttempts
+state.refinedPlan?.outcome
+provider/runtime failure evidence where already explicit
+validation result where already explicit
+```
+
+Do not classify terminal state from:
+
+```text
+LLM prose
+console text parsing
+benchmark expected outcome
+benchmark ID
+model name
+fixture name
+```
+
+The benchmark expected outcome must never influence the observed terminal
+classification.
+
+## Required terminal semantics
+
+### Completed with plan
+
+Existing successful semantics remain valid:
+
+```text
+refinedPlan.outcome = changes_required
+state.status = completed
+failureReason absent
+```
+
+or:
+
+```text
+refinedPlan.outcome = already_satisfied
+state.status = completed
+failureReason absent
+```
+
+These continue to produce the existing benchmark outcomes.
+
+### Blocked with plan
+
+Existing blocked-plan semantics remain valid:
+
+```text
+refinedPlan.outcome = blocked
+state.status = failed
+failureReason present
+```
+
+This remains an observable benchmark outcome of:
+
+```text
+blocked
+```
+
+A failed graph status does not automatically mean infrastructure failure.
+
+### Planning exhausted without refined plan
+
+A planning-exhausted terminal state must be represented explicitly when all of
+the following deterministic evidence is true:
+
+```text
+refinedPlan absent
+planning lifecycle reached its configured terminal attempt condition
+Harness returned a terminal failed state
+failure evidence indicates planning could not produce a usable plan
+```
+
+The exact attempt-boundary comparison must follow the current graph/runtime
+semantics and be locked by characterization tests before implementation.
+
+Do not infer exhaustion solely from:
+
+```text
+refinedPlan absent
+```
+
+because refined-plan absence can also occur after unrelated failures.
+
+### Provider failure
+
+A provider/API/transport failure that prevents the Harness lifecycle from
+producing a terminal planning result must remain distinguishable from planning
+exhaustion.
+
+Do not convert provider failure into `planning_exhausted` merely because no
+`refinedPlan` exists.
+
+Use existing provider/runtime error evidence when available.
+
+### Measurement infrastructure failure
+
+Workspace, fixture, process-launch, database, persistence, and other benchmark
+or runner infrastructure failures remain suite-level/task-level
+`infrastructure_failed` behavior.
+
+H0-004A must not reclassify genuine benchmark infrastructure defects as Harness
+terminal outcomes.
+
+The boundary is:
+
+```text
+Harness lifecycle reached a deterministic terminal state
+  → terminal evidence / benchmark observation
+
+benchmark infrastructure prevented valid Harness lifecycle measurement
+  → infrastructure_failed
+```
+
+### Execution and validation failures
+
+If current production Harness contracts expose deterministic implementation or
+validation terminal failures, H0-004A must preserve them as explicit terminal
+kinds rather than collapsing them into planning exhaustion.
+
+Do not invent new implementation/validation behavior if the current graph does
+not yet execute those phases.
+
+Characterize exact current evidence first.
+
+## Benchmark observation decision
+
+`BenchmarkRunObservation.finalOutcome` remains the existing domain:
+
+```text
+changes_required
+already_satisfied
+blocked
+```
+
+Do not silently add `planning_exhausted` or `provider_failed` to
+`BenchmarkExpectedOutcome` in H0-004A.
+
+Instead, separate:
+
+```text
+Harness terminal kind
+```
+
+from:
+
+```text
+benchmark domain outcome
+```
+
+For terminal states that cannot legitimately produce one of the existing
+benchmark outcomes, the benchmark result must remain a completed measured result
+with explicit terminal failure evidence, not a measurement infrastructure
+exception.
+
+Preferred direction:
+
+```ts
+type BenchmarkRunObservation = Readonly<{
+  finalOutcome: BenchmarkExpectedOutcome | null;
+  terminal: HarnessTerminalEvidence;
+  filesChanged: readonly string[];
+  validationPassed: boolean;
+  humanInterventionRequired: boolean;
+}>;
+```
+
+Exact shape may change after inspecting current acceptance/comparison contracts.
+The invariant is frozen:
+
+```text
+no domain outcome available
+  !=
+benchmark infrastructure failed
+```
+
+## Acceptance semantics
+
+H0-004A must not make a benchmark accepted merely because its execution became
+observable.
+
+The acceptance layer must distinguish:
+
+```text
+expected benchmark outcome matched
+```
+
+from:
+
+```text
+Harness terminated in a measurable but non-domain terminal state
+```
+
+For example:
+
+```text
+planning_exhausted
+```
+
+must normally produce a completed/rejected benchmark comparison unless the
+existing benchmark contract is explicitly extended in a later, separately
+specified change.
+
+B05 must not automatically become `blocked` merely because planning attempts
+were exhausted.
+
+`blocked` remains valid only when deterministic evidence supports the existing
+blocked-domain semantics.
+
+## Comparison/report semantics
+
+The next measurement must make terminal-state evidence visible without losing
+existing aggregate compatibility.
+
+At minimum, completed rejected tasks must be able to retain a stable terminal
+failure reason/category such as:
+
+```text
+planning_exhausted
+provider_failed
+execution_failed
+validation_failed
+```
+
+The suite must reserve:
+
+```text
+infrastructure_failed
+```
+
+for failures in the measurement/runner infrastructure rather than ordinary
+Harness terminal behavior.
+
+Do not recompute historical H0-004 baseline artifacts.
+
+The current 60% canonical baseline is immutable evidence of the pre-pivot
+system.
+
+## Existing observation invariants preserved
+
+Existing deterministic rules remain unchanged:
+
+```text
+filesChanged
+  ← isolated Git workspace evidence
+
+validationPassed
+  ← already executed BenchmarkValidationResult
+
+humanInterventionRequired
+  ← explicit runner lifecycle evidence
+```
+
+Do not infer any of these fields from terminal kind.
+
+In particular:
+
+```text
+planning_exhausted
+blocked
+provider_failed
+```
+
+must not automatically imply human intervention.
+
+## Scope
+
+Expected first implementation scope:
+
+```text
+src/benchmarks/observation.ts
+src/benchmarks/complete-runner.ts
+src/benchmarks/acceptance.ts        only if nullable/no-domain outcome requires it
+src/benchmarks/comparison.ts        only if terminal evidence needs projection
+src/benchmarks/aggregation.ts       only if existing reason aggregation cannot preserve it
+src/benchmarks/report.ts            only if required to expose new terminal evidence
+focused deterministic tests
+package.json                        only for a new test script
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Small changes outside this list require direct evidence from current contracts
+before implementation.
+
+## Non-goals
+
+H0-004A does not:
+
+- change B01-B05 definitions;
+- change expected outcomes;
+- change fixture revisions or source revisions;
+- change providers or provider selection;
+- change planner/reviewer/refiner models;
+- tune prompts;
+- increase/decrease planning attempts to improve benchmark score;
+- change context-window strategy;
+- add repository intelligence;
+- add Context Engine behavior;
+- add H1/H2 capability work;
+- reinterpret planning exhaustion as `blocked` without deterministic blocked evidence;
+- rewrite the accepted H0-004 canonical baseline;
+- automatically authorize GO after implementation.
+
+## Deterministic characterization required before behavior change
+
+Before implementing terminal derivation, inspect and lock the exact current
+runtime behavior for at least:
+
+```text
+successful changes_required terminal state
+successful already_satisfied terminal state
+blocked-with-refined-plan terminal state
+planning-attempt exhaustion with no refinedPlan
+provider/runtime exception before refinedPlan
+malformed/inconsistent refinedPlan terminal state
+```
+
+The characterization must establish which source fields distinguish those
+cases.
+
+Do not implement a branch for a state that current evidence cannot distinguish
+reliably.
+
+## Required deterministic tests
+
+H0-004A tests must prove at least:
+
+```text
+1. existing changes_required observation remains unchanged
+2. existing already_satisfied observation remains unchanged
+3. existing blocked-with-plan observation remains unchanged
+4. planning exhaustion without refinedPlan is observable and is not infrastructure_failed
+5. refinedPlan absence alone is insufficient to classify planning exhaustion
+6. provider failure is not classified as planning exhaustion
+7. malformed/inconsistent plan evidence is not accepted as a valid domain outcome
+8. benchmark expected outcome/ID does not affect terminal classification
+9. filesChanged semantics remain Git-derived
+10. validationPassed semantics remain validation-result-derived
+11. humanInterventionRequired remains independent of terminal kind
+12. comparison/report evidence preserves the explicit terminal category/reason
+```
+
+All focused tests must use fake/deterministic inputs and zero real provider
+usage.
+
+## Development sequence
+
+```text
+spec/decision
+→ commit spec
+→ deterministic characterization
+→ implementation
+→ focused deterministic gate
+→ full H0 regression gate
+→ implementation commit
+→ clean working tree
+→ one explicit post-pivot fixed-suite measurement
+→ evidence review
+→ GO / PIVOT / STOP checkpoint
+```
+
+No live benchmark run occurs before the implementation commit.
+
+## Measurement after implementation
+
+After H0-004A implementation and full regression acceptance:
+
+```text
+commit implementation
+confirm clean working tree
+run the unchanged fixed B01-B05 suite exactly once as a new explicit measurement
+capture new versioned evidence without overwriting the H0-004 canonical baseline
+```
+
+The post-pivot run must not reuse the existing canonical filenames if doing so
+would overwrite historical evidence.
+
+Persistence/version naming for the post-pivot measurement must be specified
+before that live run.
+
+## Pivot success criteria
+
+Primary success condition:
+
+```text
+Harness terminal states that complete their lifecycle are no longer counted as
+benchmark infrastructure failures solely because refinedPlan is absent.
+```
+
+The first post-pivot target is therefore not `SFCR = 100%`.
+
+The first target is:
+
+```text
+infrastructureFailureCount = 0
+```
+
+for B04/B05 if their runs reach valid deterministic Harness terminal states and
+no independent measurement-infrastructure failure occurs.
+
+A result such as:
+
+```text
+B04 completed / rejected / planning_exhausted
+B05 completed / rejected / planning_exhausted
+```
+
+is more useful and architecturally healthier than:
+
+```text
+B04 infrastructure_failed
+B05 infrastructure_failed
+```
+
+If B04/B05 remain rejected after becoming observable, the next pivot decision
+must use that evidence to determine whether the bottleneck is planning,
+provider/model composition, prompts, or missing context/repository intelligence.
+
+## Exit condition
+
+H0-004A is complete only when:
+
+```text
+terminal semantics are characterized and deterministic
+implementation preserves existing B01-B03 behavior
+focused gate is green
+full H0 regression gate is green
+implementation is committed
+one explicit post-pivot B01-B05 measurement is captured
+measurement evidence is reviewed
+GO / PIVOT / STOP is decided again
+```
+
+H1/H2 remain blocked until that second viability checkpoint.
+
