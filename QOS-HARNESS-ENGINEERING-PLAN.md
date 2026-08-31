@@ -22409,3 +22409,161 @@ perform exactly one authorized replacement baseline run
 
 The replacement capture must record the new Step 5A commit SHA.
 
+### Step 5 canonical baseline — accepted capture
+
+**Status:** ✅ Accepted as the canonical H0-004 baseline
+
+The explicitly authorized replacement run completed with process exit `0` and
+produced both canonical artifacts:
+
+```text
+.benchmark-results/h0-004/baseline.json
+.benchmark-results/h0-004/baseline.md
+```
+
+Capture identity:
+
+```text
+capturedAt:
+  2026-08-31T01:07:14.759Z
+
+Harness gitRevision:
+  2664cb9d46eaa79e2bbece570ed78cba722129ef
+
+packageVersion:
+  0.1.0-alpha.7
+```
+
+The captured Harness revision is exactly the committed Step 5A source revision
+used for the replacement measurement.
+
+Resolved runtime bindings:
+
+```text
+planner:
+  provider = nvidia
+  model = nvidia/nemotron-3.5-lightning-30b-a3b
+
+reviewer:
+  provider = nvidia
+  model = openai/gpt-oss-20b
+
+refiner:
+  provider = nvidia
+  model = nvidia/nemotron-3.5-lightning-30b-a3b
+```
+
+Fixed-suite provenance:
+
+```text
+B01 fixture-simple-api
+  revision = b01-v1
+  commit = e4eec8d1560ed76c027581da72f224ca1ad98632
+
+B02 fixture-health-already-present
+  revision = b02-v1
+  commit = 756c2105d32e2bbc70b5991e3c5fca51f495a908
+
+B03 fixture-component-app
+  revision = b03-v1
+  commit = dc7c900578323848c9039962b643bb3cc9f052ba
+
+B04 qflow-workflow-canvas
+  revision = b04-v1
+  commit = 8e3d67d789fd12484206eade90a021300997f241
+  sourceRevision = 986051f70be5ea06323d4dd508a5465b797a5396
+
+B05 qos-harness-architecture
+  revision = b05-v1
+  commit = f2c541714e125e01fc77ef6a1fb331cde2a96194
+  sourceRevision = 4329623bb82bda660c245074739617e662ff3b68
+```
+
+Canonical task order and results:
+
+```text
+B01 completed / accepted
+B02 completed / accepted
+B03 completed / accepted
+B04 infrastructure_failed
+B05 infrastructure_failed
+```
+
+Both B04 and B05 reached the accepted benchmark execution path and surfaced the
+same post-Harness observation-boundary failure:
+
+```text
+BenchmarkObservationDerivationError:
+Cannot derive benchmark outcome without refinedPlan.
+```
+
+The prior B04 PostgreSQL connection defect is absent from the canonical run.
+Therefore the replacement capture is valid measurement evidence rather than a
+measurement-infrastructure failure.
+
+Canonical aggregate:
+
+```text
+selectedTaskCount = 5
+completedTaskCount = 3
+infrastructureFailureCount = 2
+acceptedTaskCount = 3
+
+SFCR = 60.00%
+outcomeCorrectnessRate = 60.00%
+validationSuccessRate = 60.00%
+humanInterventionRate = 0.00%
+
+totalHarnessDurationMs = 128479
+averageHarnessDurationMs = 42826.333333333336
+
+totalLlmCallCount = 16
+averageLlmCallsPerCompletedTask = 5.333333333333333
+
+promptTokens = 15033
+completionTokens = 2261
+totalTokens = 17294
+
+cost = null
+```
+
+Failure evidence:
+
+```text
+terminalFailureReasonCounts = {}
+
+infrastructureFailureReasonCounts:
+  BenchmarkObservationDerivationError = 2
+```
+
+The JSON and Markdown artifacts contain the same capture identity, runtime
+bindings, fixture provenance, fixed B01-B05 ordering, aggregate metrics, task
+results, and failure evidence.
+
+No hidden retry was performed after this canonical replacement run.
+
+The canonical baseline is accepted because the measurement pipeline completed
+successfully and reproducibly captured the fixed suite. Acceptance does not
+mean that 60% SFCR is considered adequate product performance.
+
+### Step 5 exit state
+
+H0-004 Step 5 is complete once:
+
+```text
+canonical baseline artifacts are committed
+this acceptance metadata is committed
+final H0-004 regression gate is green
+```
+
+The next activity is the separate H0-004 viability checkpoint:
+
+```text
+GO / PIVOT / STOP
+```
+
+That decision must use the canonical evidence above, including the two
+`BenchmarkObservationDerivationError` outcomes.
+
+Do not begin H1/H2 before that checkpoint is explicitly completed.
+

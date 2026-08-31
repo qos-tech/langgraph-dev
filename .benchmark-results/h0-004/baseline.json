@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-08-31T01:07:14.759Z",
+  "harness": {
+    "gitRevision": "2664cb9d46eaa79e2bbece570ed78cba722129ef",
+    "packageVersion": "0.1.0-alpha.7"
+  },
+  "runtime": {
+    "roles": {
+      "planner": {
+        "provider": "nvidia",
+        "model": "nvidia/nemotron-3.5-lightning-30b-a3b"
+      },
+      "reviewer": {
+        "provider": "nvidia",
+        "model": "openai/gpt-oss-20b"
+      },
+      "refiner": {
+        "provider": "nvidia",
+        "model": "nvidia/nemotron-3.5-lightning-30b-a3b"
+      }
+    }
+  },
+  "fixtures": [
+    {
+      "benchmarkId": "B01",
+      "repositoryId": "fixture-simple-api",
+      "revision": "b01-v1",
+      "commit": "e4eec8d1560ed76c027581da72f224ca1ad98632",
+      "sourceRevision": null
+    },
+    {
+      "benchmarkId": "B02",
+      "repositoryId": "fixture-health-already-present",
+      "revision": "b02-v1",
+      "commit": "756c2105d32e2bbc70b5991e3c5fca51f495a908",
+      "sourceRevision": null
+    },
+    {
+      "benchmarkId": "B03",
+      "repositoryId": "fixture-component-app",
+      "revision": "b03-v1",
+      "commit": "dc7c900578323848c9039962b643bb3cc9f052ba",
+      "sourceRevision": null
+    },
+    {
+      "benchmarkId": "B04",
+      "repositoryId": "qflow-workflow-canvas",
+      "revision": "b04-v1",
+      "commit": "8e3d67d789fd12484206eade90a021300997f241",
+      "sourceRevision": "986051f70be5ea06323d4dd508a5465b797a5396"
+    },
+    {
+      "benchmarkId": "B05",
+      "repositoryId": "qos-harness-architecture",
+      "revision": "b05-v1",
+      "commit": "f2c541714e125e01fc77ef6a1fb331cde2a96194",
+      "sourceRevision": "4329623bb82bda660c245074739617e662ff3b68"
+    }
+  ],
+  "report": {
+    "schemaVersion": 1,
+    "suite": {
+      "selectedTaskCount": 5,
+      "completedTaskCount": 3,
+      "infrastructureFailureCount": 2,
+      "acceptedTaskCount": 3,
+      "sfcr": 0.6,
+      "outcomeMatchCount": 3,
+      "outcomeCorrectnessRate": 0.6,
+      "validationPassedCount": 3,
+      "validationSuccessRate": 0.6,
+      "humanInterventionRequiredCount": 0,
+      "humanInterventionRate": 0,
+      "totalHarnessDurationMs": 128479,
+      "averageHarnessDurationMs": 42826.333333333336,
+      "totalLlmCallCount": 16,
+      "averageLlmCallsPerCompletedTask": 5.333333333333333,
+      "promptTokens": 15033,
+      "completionTokens": 2261,
+      "totalTokens": 17294,
+      "cost": null,
+      "terminalFailureReasonCounts": {},
+      "infrastructureFailureReasonCounts": {
+        "BenchmarkObservationDerivationError": 2
+      }
+    },
+    "tasks": [
+      {
+        "benchmarkId": "B01",
+        "status": "completed",
+        "comparison": {
+          "benchmarkId": "B01",
+          "difficulty": "trivial",
+          "expectedOutcome": "changes_required",
+          "observedOutcome": "changes_required",
+          "accepted": true,
+          "acceptanceFailures": [],
+          "validationPassed": true,
+          "humanInterventionRequired": false,
+          "filesChanged": [],
+          "filesChangedCount": 0,
+          "harnessDurationMs": 24870,
+          "llmCallCount": 5,
+          "llmCalls": [
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 4.9308682500000005,
+              "promptTokens": 618,
+              "completionTokens": 117,
+              "totalTokens": 735
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 4.438655958,
+              "promptTokens": 960,
+              "completionTokens": 97,
+              "totalTokens": 1057
+            },
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 3.1606455000000007,
+              "promptTokens": 798,
+              "completionTokens": 141,
+              "totalTokens": 939
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 4.136675375000001,
+              "promptTokens": 1101,
+              "completionTokens": 91,
+              "totalTokens": 1192
+            },
+            {
+              "role": "refiner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 7.869085457999998,
+              "promptTokens": 874,
+              "completionTokens": 161,
+              "totalTokens": 1035
+            }
+          ],
+          "promptTokens": 4351,
+          "completionTokens": 607,
+          "totalTokens": 4958,
+          "cost": null,
+          "terminalFailureReason": null
+        }
+      },
+      {
+        "benchmarkId": "B02",
+        "status": "completed",
+        "comparison": {
+          "benchmarkId": "B02",
+          "difficulty": "already-satisfied",
+          "expectedOutcome": "already_satisfied",
+          "observedOutcome": "already_satisfied",
+          "accepted": true,
+          "acceptanceFailures": [],
+          "validationPassed": true,
+          "humanInterventionRequired": false,
+          "filesChanged": [],
+          "filesChangedCount": 0,
+          "harnessDurationMs": 34688,
+          "llmCallCount": 6,
+          "llmCalls": [
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 4.169013583,
+              "promptTokens": 632,
+              "completionTokens": 128,
+              "totalTokens": 760
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 10.018778708000001,
+              "promptTokens": 983,
+              "completionTokens": 242,
+              "totalTokens": 1225
+            },
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 3.297423917,
+              "promptTokens": 801,
+              "completionTokens": 136,
+              "totalTokens": 937
+            },
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 3.3564228329999968,
+              "promptTokens": 861,
+              "completionTokens": 119,
+              "totalTokens": 980
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 3.663741041000001,
+              "promptTokens": 1141,
+              "completionTokens": 97,
+              "totalTokens": 1238
+            },
+            {
+              "role": "refiner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 10.142307624999994,
+              "promptTokens": 924,
+              "completionTokens": 127,
+              "totalTokens": 1051
+            }
+          ],
+          "promptTokens": 5342,
+          "completionTokens": 849,
+          "totalTokens": 6191,
+          "cost": null,
+          "terminalFailureReason": null
+        }
+      },
+      {
+        "benchmarkId": "B03",
+        "status": "completed",
+        "comparison": {
+          "benchmarkId": "B03",
+          "difficulty": "localized",
+          "expectedOutcome": "changes_required",
+          "observedOutcome": "changes_required",
+          "accepted": true,
+          "acceptanceFailures": [],
+          "validationPassed": true,
+          "humanInterventionRequired": false,
+          "filesChanged": [],
+          "filesChangedCount": 0,
+          "harnessDurationMs": 68921,
+          "llmCallCount": 5,
+          "llmCalls": [
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 29.89180637500001,
+              "promptTokens": 631,
+              "completionTokens": 148,
+              "totalTokens": 779
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 4.855423957999999,
+              "promptTokens": 1019,
+              "completionTokens": 124,
+              "totalTokens": 1143
+            },
+            {
+              "role": "planner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 20.317505333000007,
+              "promptTokens": 1066,
+              "completionTokens": 225,
+              "totalTokens": 1291
+            },
+            {
+              "role": "reviewer",
+              "model": "openai/gpt-oss-20b",
+              "elapsedSeconds": 4.536656749999994,
+              "promptTokens": 1441,
+              "completionTokens": 106,
+              "totalTokens": 1547
+            },
+            {
+              "role": "refiner",
+              "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+              "elapsedSeconds": 9.28742,
+              "promptTokens": 1183,
+              "completionTokens": 202,
+              "totalTokens": 1385
+            }
+          ],
+          "promptTokens": 5340,
+          "completionTokens": 805,
+          "totalTokens": 6145,
+          "cost": null,
+          "terminalFailureReason": null
+        }
+      },
+      {
+        "benchmarkId": "B04",
+        "status": "infrastructure_failed",
+        "error": {
+          "name": "BenchmarkObservationDerivationError",
+          "message": "Cannot derive benchmark outcome without refinedPlan."
+        }
+      },
+      {
+        "benchmarkId": "B05",
+        "status": "infrastructure_failed",
+        "error": {
+          "name": "BenchmarkObservationDerivationError",
+          "message": "Cannot derive benchmark outcome without refinedPlan."
+        }
+      }
+    ]
+  }
+}
