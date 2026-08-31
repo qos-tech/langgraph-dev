@@ -11,6 +11,7 @@ import type {
 import {
   BENCHMARK_POSTGRES_ADMIN_URL_ENV,
   DisposablePostgresBenchmarkEnvironmentPreparer,
+  postgresConnectionEnvironment,
 } from "./benchmarks/postgres-environment.js";
 
 function benchmark(repositoryId: string): BenchmarkTask {
@@ -49,6 +50,38 @@ class RecordingCommandRunner implements PostgresAdminCommandRunner {
 const workspace = {
   repositoryPath: "/isolated/benchmark",
 };
+
+{
+  assert.deepEqual(
+    postgresConnectionEnvironment(
+      "postgresql://qflow:p%40ss@db.example.test:5544/postgres?sslmode=require",
+    ),
+    {
+      PGHOST: "db.example.test",
+      PGPORT: "5544",
+      PGUSER: "qflow",
+      PGPASSWORD: "p@ss",
+      PGDATABASE: "postgres",
+      PGSSLMODE: "require",
+    },
+    "psql admin commands must receive explicit libpq connection environment instead of treating the URI as a database name",
+  );
+
+  assert.deepEqual(
+    postgresConnectionEnvironment(
+      "postgres://localhost/postgres",
+    ),
+    {
+      PGHOST: "localhost",
+      PGDATABASE: "postgres",
+    },
+  );
+
+  assert.throws(
+    () => postgresConnectionEnvironment("file:///tmp/postgres"),
+    new RegExp(BENCHMARK_POSTGRES_ADMIN_URL_ENV),
+  );
+}
 
 {
   const runner = new RecordingCommandRunner();

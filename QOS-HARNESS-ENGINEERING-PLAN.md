@@ -22223,3 +22223,189 @@ npm run benchmark:h0-004-baseline
 until the deterministic/full gates are green, the implementation is committed,
 and the working tree is clean.
 
+### Step 5 live baseline attempt 1 — invalidated measurement
+
+**Status:** ❌ Not accepted as canonical baseline
+
+The first live command completed and captured artifacts with process exit `0`,
+but post-run inspection exposed a Step 5 measurement-infrastructure defect.
+
+Observed capture identity:
+
+```text
+capturedAt:
+  2026-08-30T20:29:29.697Z
+
+Harness gitRevision:
+  63824c5d9a1bd319f1e9a9f5b784a120f3712501
+
+package:
+  0.1.0-alpha.7
+```
+
+Observed task results:
+
+```text
+B01 completed / accepted
+B02 completed / accepted
+B03 completed / accepted
+B04 infrastructure_failed
+B05 infrastructure_failed
+```
+
+The generated aggregate reported:
+
+```text
+selectedTaskCount = 5
+completedTaskCount = 3
+infrastructureFailureCount = 2
+acceptedTaskCount = 3
+SFCR = 60.00%
+```
+
+These numbers are retained as diagnostic evidence only.
+
+They must **not** be used for the H0-004 GO / PIVOT / STOP decision.
+
+#### Why attempt 1 is invalid
+
+B04 failed before Harness execution while creating the disposable PostgreSQL
+database.
+
+The accepted PostgreSQL command runner supplied the complete admin URI through:
+
+```text
+PGDATABASE=<postgresql://...>
+```
+
+but the real `psql` process attempted the local default Unix socket instead of
+the configured PostgreSQL server.
+
+Therefore the disposable PostgreSQL implementation had not been proven against
+the real libpq process behavior.
+
+Step 5 preflight also checked only:
+
+```text
+psql --version
+```
+
+plus URL syntax.
+
+It did not execute a real admin connection probe through the same command path
+used by B04.
+
+That violates the Step 5 preflight requirement that invalid B04 PostgreSQL
+prerequisites abort before the first provider-backed benchmark execution.
+
+Because B04 was prevented from being measured by the measurement
+infrastructure itself, attempt 1 is not a valid canonical viability baseline.
+
+#### B05 observation retained
+
+B05 reached the Harness but later surfaced:
+
+```text
+BenchmarkObservationDerivationError:
+Cannot derive benchmark outcome without refinedPlan.
+```
+
+The console evidence also showed planning-attempt exhaustion.
+
+This is retained as genuine diagnostic Harness/runner evidence.
+
+Do not fix or reinterpret B05 as part of the PostgreSQL correction.
+
+The next valid baseline rerun must measure B05 unchanged.
+
+### Step 5A — PostgreSQL real-process/preflight correction
+
+**Status:** 🧪 Implemented — deterministic gate pending
+
+Correction scope:
+
+```text
+src/benchmarks/postgres-environment.ts
+src/test-h0-004-benchmark-postgres-environment.ts
+src/benchmarks/real-suite.ts
+QOS-HARNESS-ENGINEERING-PLAN.md
+```
+
+Decision:
+
+1. Parse `QOS_BENCHMARK_POSTGRES_ADMIN_URL` into standard libpq environment
+   fields:
+   - `PGHOST`
+   - `PGPORT` when present
+   - `PGUSER` when present
+   - `PGPASSWORD` when present
+   - `PGDATABASE`
+   - `PGSSLMODE` when present
+
+2. Keep credentials out of the `psql` argv.
+
+3. Use the exact same real `PsqlPostgresAdminCommandRunner` during Step 5
+   preflight with:
+
+```sql
+SELECT 1;
+```
+
+4. A PostgreSQL connection failure now aborts preflight before any benchmark
+   provider call.
+
+5. Do not change B04 fixture source/revision, disposable database semantics,
+   benchmark definitions, prompts, models, acceptance, aggregation, or report
+   semantics.
+
+6. Do not change B05 behavior in this correction.
+
+### Attempt-1 artifact handling
+
+The untracked canonical files produced by invalid attempt 1:
+
+```text
+.benchmark-results/h0-004/baseline.json
+.benchmark-results/h0-004/baseline.md
+```
+
+must not be committed as the canonical baseline.
+
+After Step 5A is accepted and committed, explicitly remove those two invalid
+canonical files before the authorized rerun.
+
+The invalid attempt remains documented in this Engineering Plan and in the
+separately retained diagnostic evidence.
+
+The rerun is **explicitly authorized** because attempt 1 is invalidated by a
+measurement-infrastructure defect. This is not a hidden retry to improve a poor
+benchmark score.
+
+### Step 5A focused gate
+
+```bash
+npm run typecheck && \
+npm run test:h0-004-benchmark-postgres-environment && \
+npm run test:h0-004-real-suite && \
+npm run test:h0-004-benchmark-environment && \
+npm run test:h0-004-comparison-report && \
+npm run test:h0-004-benchmark-aggregation && \
+npm run test:h0-004-benchmark-suite-runner
+```
+
+After the focused gate, run the complete H0-004 regression gate.
+
+Only then commit Step 5A.
+
+After that commit:
+
+```text
+remove invalid attempt-1 canonical artifacts
+confirm clean working tree
+confirm new HEAD
+run deterministic preflight through baseline command
+perform exactly one authorized replacement baseline run
+```
+
+The replacement capture must record the new Step 5A commit SHA.
+

@@ -23,7 +23,10 @@ import {
 } from "./fixture-materializer.js";
 import { GitWorktreeBenchmarkWorkspaceResolver } from "./git-worktree-workspace.js";
 import { LocalBenchmarkFixtureLocator } from "./local-fixture-locator.js";
-import { DisposablePostgresBenchmarkEnvironmentPreparer } from "./postgres-environment.js";
+import {
+  DisposablePostgresBenchmarkEnvironmentPreparer,
+  PsqlPostgresAdminCommandRunner,
+} from "./postgres-environment.js";
 import {
   createBenchmarkComparisonReport,
   renderBenchmarkComparisonReportMarkdown,
@@ -442,8 +445,15 @@ function assertPostgresAdminUrl(value: string): void {
   }
 }
 
-async function assertPsqlAvailable(): Promise<void> {
-  await execFileAsync("psql", ["--version"], { encoding: "utf8" });
+async function assertPostgresAdminConnection(
+  adminUrl: string,
+): Promise<void> {
+  const runner = new PsqlPostgresAdminCommandRunner();
+
+  await runner.run({
+    adminUrl,
+    sql: "SELECT 1;",
+  });
 }
 
 async function captureDefaultRuntime(
@@ -526,7 +536,7 @@ export async function createDefaultH0BaselineDependencies(
 
     await assertBaselineArtifactsAbsent(artifactDirectory);
     assertPostgresAdminUrl(postgresAdminUrl);
-    await assertPsqlAvailable();
+    await assertPostgresAdminConnection(postgresAdminUrl);
 
     const runtime = await captureDefaultRuntime(env);
 

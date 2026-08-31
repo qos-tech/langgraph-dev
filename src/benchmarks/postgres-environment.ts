@@ -18,6 +18,50 @@ export interface PostgresAdminCommandRunner {
   run(request: PostgresAdminCommandRequest): Promise<void>;
 }
 
+export type PostgresConnectionEnvironment = Readonly<{
+  PGHOST: string;
+  PGPORT?: string;
+  PGUSER?: string;
+  PGPASSWORD?: string;
+  PGDATABASE: string;
+  PGSSLMODE?: string;
+}>;
+
+export function postgresConnectionEnvironment(
+  adminUrl: string,
+): PostgresConnectionEnvironment {
+  const parsed = new URL(adminUrl);
+
+  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+    throw new Error(
+      `${BENCHMARK_POSTGRES_ADMIN_URL_ENV} must use postgres:// or postgresql://`,
+    );
+  }
+
+  const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+
+  if (!parsed.hostname || !database) {
+    throw new Error(
+      `${BENCHMARK_POSTGRES_ADMIN_URL_ENV} must include host and database`,
+    );
+  }
+
+  const sslMode = parsed.searchParams.get("sslmode")?.trim();
+
+  return {
+    PGHOST: parsed.hostname,
+    ...(parsed.port ? { PGPORT: parsed.port } : {}),
+    ...(parsed.username
+      ? { PGUSER: decodeURIComponent(parsed.username) }
+      : {}),
+    ...(parsed.password
+      ? { PGPASSWORD: decodeURIComponent(parsed.password) }
+      : {}),
+    PGDATABASE: database,
+    ...(sslMode ? { PGSSLMODE: sslMode } : {}),
+  };
+}
+
 export class PsqlPostgresAdminCommandRunner
   implements PostgresAdminCommandRunner
 {
@@ -35,7 +79,7 @@ export class PsqlPostgresAdminCommandRunner
         encoding: "utf8",
         env: {
           ...process.env,
-          PGDATABASE: request.adminUrl,
+          ...postgresConnectionEnvironment(request.adminUrl),
         },
       },
     );
