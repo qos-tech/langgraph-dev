@@ -24513,3 +24513,360 @@ Proceed only with the deterministic focused gate defined above. Do not run
 the implementation is committed, the worktree is clean, and the exact new
 implementation SHA is frozen.
 
+### H0-004A Step 4 validation and acceptance record
+
+**Status:** ✅ Accepted
+
+Focused deterministic gate:
+
+```text
+PASS
+```
+
+Full H0 regression gate:
+
+```text
+PASS
+```
+
+Accepted Step 4 behavior:
+
+```text
+default H0-004 capture
+  → remains <harnessRepositoryPath>/.benchmark-results/h0-004
+
+explicit H0-004A remeasurement
+  → uses an external artifact directory
+  → ~/.cache/qos-harness/measurements/h0-004a/<implementation-sha>
+
+canonical H0-004 artifacts
+  → remain immutable
+
+repository preflight
+  → still requires a clean Harness worktree
+
+fixed suite
+  → B01-B05 definitions/order/revisions remain unchanged
+```
+
+Accepted implementation commit:
+
+```text
+58a1fc4a0d2353a0db51a7f7a67000358351db0d
+```
+
+No real provider usage or B01-B05 execution was part of the deterministic
+acceptance gates.
+
+## H0-004A Post-pivot Measurement Record
+
+**Implementation SHA:** `58a1fc4a0d2353a0db51a7f7a67000358351db0d`
+
+**Measurement status:** ⚠️ Inconclusive — provider/runtime transport stall
+
+### Observed live execution
+
+The single authorized H0-004A real B01-B05 execution started successfully and
+entered the real Harness lifecycle.
+
+Observed evidence during B01 included:
+
+```text
+planner/refiner model:
+  nvidia/nemotron-3.5-lightning-30b-a3b
+
+reviewer model:
+  openai/gpt-oss-20b
+
+same reviewer model:
+  one earlier call completed in approximately 16.7s
+
+later reviewer call:
+  remained pending for several minutes
+  process remained alive with near-zero CPU
+  Node process retained an ESTABLISHED HTTPS connection
+  provider eventually emitted:
+    NVIDIA network error; retry 1/6
+  retry attempt then remained pending without progress
+```
+
+The run was manually interrupted after the provider/runtime call remained stalled
+well beyond its previously observed normal latency.
+
+### Artifact outcome
+
+The H0-004A external target contained no completed:
+
+```text
+baseline.json
+baseline.md
+```
+
+The canonical H0-004 baseline remained byte-for-byte unchanged:
+
+```text
+baseline.json
+sha256 = b96388d821dc9e160bc4face1bb201cb9cbb9de9fbccc4d266fa5ec5172f5f47
+
+baseline.md
+sha256 = 65d31d6c85b44912c9c5ee26eb1abbf5cc553786c7cab54db782cc7c5bdbfe91
+```
+
+The Harness worktree remained clean after the interrupted run.
+
+### Measurement interpretation
+
+This execution is not a valid completed comparison capture because persistence
+was never reached.
+
+It is still valid live evidence because the fixed benchmark suite had already
+entered real provider execution.
+
+Therefore the run must not be silently discarded and repeated merely to obtain a
+cleaner score.
+
+The observed failure is distinct from the H0-004 terminal-observation defect that
+motivated H0-004A.
+
+Current evidence indicates:
+
+```text
+H0-004A terminal outcome observability implementation
+  → deterministic implementation accepted
+
+post-pivot comparison measurement
+  → not completed
+
+blocking condition
+  → provider/runtime transport stall
+
+effective whole-call deadline
+  → absent
+
+provider transport retry
+  → present, but one retry attempt can remain pending for minutes
+```
+
+### Second viability checkpoint
+
+Decision:
+
+```text
+PIVOT
+```
+
+Reason:
+
+```text
+the benchmark measurement boundary is now trustworthy enough to expose a
+different operational blocker: provider-call reliability/deadline behavior
+prevents a bounded reproducible real-suite measurement
+```
+
+Do not classify this as evidence that B04/B05 now pass or fail.
+
+Do not authorize H1/H2 yet.
+
+Do not change provider/model selection merely to force the H0-004A benchmark to
+finish.
+
+Proceed to a narrow provider-call reliability characterization before another
+real suite measurement is authorized.
+
+# H0-004B — Provider Call Reliability Characterization
+
+**Status:** 📋 Specification / decision
+
+## Objective
+
+Determine whether the observed live stall is primarily:
+
+```text
+model/route specific
+provider transport specific
+or a general missing-deadline weakness in Harness provider execution
+```
+
+before changing runtime policy or benchmark model selection.
+
+H0-004B is diagnostic first.
+
+It must not rerun B01-B05 during characterization.
+
+## Problem statement
+
+Current provider execution supports cooperative cancellation through
+`AbortSignal`, and NVIDIA owns transport retry behavior.
+
+However the live H0-004A run demonstrated that:
+
+```text
+one provider attempt can remain pending for many minutes
+```
+
+before the adapter reports a network error.
+
+After the first network error:
+
+```text
+retry 1/6
+```
+
+the next transport attempt may again remain pending for minutes.
+
+A retry count alone therefore does not provide a bounded wall-clock execution
+policy.
+
+## Step 1 — Deterministic Reliability Characterization
+
+### Objective
+
+Freeze the exact current provider-call behavior before introducing timeout or
+deadline policy.
+
+No production behavior change.
+
+### Required characterization
+
+Step 1 must prove from current source/tests that:
+
+```text
+1. executeStructuredLlm does not create a whole-call timeout/deadline
+2. StructuredLlmRequest.signal can reach the NVIDIA fetch boundary
+3. NVIDIA transport retry is adapter-owned
+4. abort stops retry progression when cancellation is actually signalled
+5. retry count does not itself impose a wall-clock deadline on an in-flight fetch
+6. provider/runtime exceptions propagate through the current application boundary
+7. no benchmark expected outcome influences provider reliability behavior
+8. no B01-B05 execution is required for these assertions
+```
+
+### Expected deterministic test
+
+Create:
+
+```text
+src/test-h0-004b-provider-reliability-characterization.ts
+```
+
+The test must consume zero real provider usage.
+
+It should rely on deterministic fake/mocked transport and source-level
+characterization only where direct runtime proof is not practical.
+
+### Non-goals
+
+Step 1 does not:
+
+```text
+add timeoutMs
+add AbortSignal.timeout()
+change NVIDIA retry count
+change retry backoff
+change reviewer model
+change planner/refiner model
+add provider fallback
+add whole-call retry
+rerun B01-B05
+change benchmark expectations
+change fixtures
+change prompts
+change planning budgets
+change H0-004A terminal evidence
+```
+
+### Focused gate
+
+At minimum:
+
+```bash
+npm run typecheck && \
+npm run test:h0-004b-provider-reliability-characterization && \
+npm run test:provider-lifecycle && \
+npm run test:llm-execution && \
+npm run test:execution-policy-characterization && \
+npm run test:provider-characterization
+```
+
+No real NVIDIA request is allowed.
+
+## Step 2 — Isolated Live Provider Probe
+
+Step 2 is authorized only after Step 1 is accepted and committed.
+
+The probe must remain outside B01-B05 and compare provider-call reliability
+without changing the benchmark suite.
+
+Initial controlled comparison:
+
+```text
+A:
+  provider = NVIDIA
+  model = openai/gpt-oss-20b
+
+B:
+  provider = NVIDIA
+  model = nvidia/nemotron-3.5-lightning-30b-a3b
+```
+
+Hold all other probe semantics constant wherever the adapters permit.
+
+The probe should record per call:
+
+```text
+model
+attempt index
+startedAt
+finishedAt
+durationMs
+success/error
+usage when available
+transport retry evidence when observable
+```
+
+The purpose is not model quality scoring.
+
+The question is:
+
+```text
+does the prolonged stall follow gpt-oss-20b specifically,
+or does it reproduce across NVIDIA model routes?
+```
+
+Do not run the full benchmark suite as part of Step 2.
+
+## Step 3 — Reliability Policy Decision
+
+Only after deterministic characterization plus isolated live evidence may the
+project decide whether to introduce a bounded provider-call deadline.
+
+A future deadline must use the existing cooperative cancellation path so that
+underlying provider work is actually aborted.
+
+Do not implement a fake timeout using only `Promise.race()`.
+
+The timeout value must be justified by observed live latency rather than chosen
+arbitrarily.
+
+## H0-004B exit condition
+
+H0-004B is complete only when:
+
+```text
+current reliability semantics are deterministically characterized
+isolated live probe evidence is captured
+model-specific vs transport/general behavior is assessed
+deadline policy is explicitly accepted or rejected
+any accepted reliability change passes deterministic regression gates
+a new committed measurement SHA is frozen
+a new explicit real-suite measurement is authorized
+```
+
+Until then:
+
+```text
+H1/H2 remain blocked
+H0-004A is not rerun
+provider/model changes are diagnostic only, not benchmark-score tuning
+```
+
