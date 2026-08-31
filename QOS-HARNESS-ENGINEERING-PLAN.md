@@ -25272,3 +25272,222 @@ Do not rerun the same SHA merely to improve or replace the evidence.
 
 Do not run B01-B05 as part of this diagnostic step.
 
+## H0-004B Step 2 Live Probe Record
+
+**Implementation SHA:** `26d1abe86bdb035bc0764fad02246da3e93716f7`
+
+**Status:** ✅ Completed — diagnostic evidence captured
+
+The single authorized H0-004B live provider probe completed successfully and
+persisted:
+
+```text
+~/.cache/qos-harness/probes/h0-004b/26d1abe86bdb035bc0764fad02246da3e93716f7/probe.json
+```
+
+### Fixed probe settings
+
+```text
+provider = NVIDIA
+models:
+  A = openai/gpt-oss-20b
+  B = nvidia/nemotron-3.5-lightning-30b-a3b
+rounds = 3
+calls = 6
+timeoutMs = 120000
+maxOutputTokens = 256
+transportRetries = 0
+```
+
+### Observations
+
+```text
+#1 GPT-OSS   success   2720 ms
+#2 Nemotron  error      395 ms   NVIDIA HTTP 502 / Bad Gateway
+#3 GPT-OSS   success   2433 ms
+#4 Nemotron  success   1628 ms
+#5 GPT-OSS   success   2060 ms
+#6 Nemotron  success   2534 ms
+```
+
+Aggregate diagnostic view:
+
+```text
+GPT-OSS:
+  success = 3/3
+  timeout = 0/3
+  error = 0/3
+  successful latency range = 2060-2720 ms
+
+Nemotron:
+  success = 2/3
+  timeout = 0/3
+  error = 1/3
+  error = HTTP 502 Bad Gateway / upstream request failed
+  successful latency range = 1628-2534 ms
+
+all calls:
+  timeout = 0/6
+  total probe wall time ≈ 11.8 s
+```
+
+### Interpretation
+
+The live evidence does **not** support the hypothesis that the H0-004A stall is
+specific to `openai/gpt-oss-20b`.
+
+In this controlled sample GPT-OSS completed all three calls normally.
+
+The only observed provider failure occurred on the Nemotron route:
+
+```text
+HTTP 502
+Bad Gateway
+Upstream request failed
+```
+
+This is evidence of transient upstream/provider transport unreliability that is
+not unique to GPT-OSS.
+
+The probe also did not reproduce the prior multi-minute stall, so it cannot prove
+that every model route has the same long-hang probability.
+
+The strongest supported conclusion is therefore:
+
+```text
+model-specific GPT-OSS failure
+  → not supported by current probe
+
+provider/upstream transient failure
+  → directly observed
+
+unbounded single-attempt wait risk
+  → already proven by Step 1 semantics
+  → observed operationally during H0-004A
+  → not reproduced in this short Step 2 sample
+```
+
+Changing reviewer model is therefore not accepted as the reliability fix.
+
+## H0-004B Step 3 — Bounded Provider Call Deadline Policy
+
+**Status:** 📋 Specification / decision
+
+### Decision
+
+Proceed with a portable bounded provider-call deadline.
+
+Reason:
+
+```text
+H0-004A live execution demonstrated an operationally unacceptable multi-minute
+provider stall
+
+H0-004B Step 1 proved retry count does not bound one in-flight transport attempt
+
+H0-004B Step 2 showed transient upstream failure can occur across the NVIDIA
+provider and did not implicate GPT-OSS specifically
+
+cooperative cancellation is already implemented end-to-end
+```
+
+A bounded deadline is therefore the minimum reliability control justified by
+evidence.
+
+### Scope
+
+Introduce a complete-call deadline at the portable execution boundary:
+
+```text
+executeStructuredLlm(...)
+```
+
+The deadline must abort underlying provider work through the existing
+`AbortSignal` lifecycle path.
+
+Do not implement a timeout using only `Promise.race()`.
+
+### Policy shape
+
+The deadline belongs to portable Harness execution policy, not provider hints.
+
+Target conceptual shape:
+
+```text
+runtime role config
+  → callTimeoutMs?
+  → executeStructuredLlm(...)
+  → composed AbortSignal
+  → provider.generateStructured(...)
+  → NVIDIA fetch / Claude process
+```
+
+The final field name and composition mechanism must be derived from the current
+runtime-composition source before implementation.
+
+### Initial value decision
+
+Do **not** adopt the Step 2 diagnostic `120000 ms` as the production default.
+
+Step 3 must first inspect current role/runtime configuration and choose a
+conservative initial deadline that:
+
+```text
+bounds pathological multi-minute stalls
+does not treat normal model latency as failure
+is role-configurable or otherwise explicitly scoped
+preserves existing external cancellation
+```
+
+The chosen value must be documented as an operational alpha policy rather than a
+statistical SLA.
+
+### Required behavior
+
+Step 3 must prove deterministically:
+
+```text
+1. a call exceeding the configured deadline aborts underlying provider work
+2. existing caller-supplied cancellation still works
+3. caller cancellation and deadline cancellation compose safely
+4. timeout produces a stable distinguishable error/reason
+5. no hidden whole-call retry is introduced
+6. NVIDIA transport retry ownership remains adapter-local
+7. Claude process cancellation still terminates the real child lifecycle
+8. no graph/task retry semantics change
+9. no provider fallback is introduced
+10. benchmark expectedOutcome does not influence timeout behavior
+```
+
+### Non-goals
+
+Do not:
+
+```text
+change reviewer model
+change planner/refiner model
+change prompts
+change B01-B05
+change benchmark expected outcomes
+add provider fallback
+add Harness whole-call retry
+change NVIDIA retry/backoff schedule
+tune model quality
+rerun H0-004A
+```
+
+### Exit condition
+
+After the deadline policy passes deterministic regression gates:
+
+```text
+commit implementation
+freeze a new SHA
+authorize a new controlled real-suite measurement under a new measurement identity
+```
+
+Only that new measurement may decide whether the original H0-004A observability
+target can now be evaluated reliably.
+
+H1/H2 remain blocked until that measurement and the next GO/PIVOT/STOP checkpoint.
+
